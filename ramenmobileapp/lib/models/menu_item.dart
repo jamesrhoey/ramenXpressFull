@@ -6,6 +6,8 @@ class MenuItem {
   final String category;
   final List<AddOn> availableAddOns;
   final List<Ingredient> ingredients;
+  final int? stockQuantity;
+  final String? stockStatus;
 
   MenuItem({
     this.id,
@@ -15,6 +17,8 @@ class MenuItem {
     required this.category,
     this.availableAddOns = const [],
     this.ingredients = const [],
+    this.stockQuantity,
+    this.stockStatus,
   });
 
   Map<String, dynamic> toJson() {
@@ -26,6 +30,8 @@ class MenuItem {
       'category': category,
       'availableAddOns': availableAddOns.map((addon) => addon.toJson()).toList(),
       'ingredients': ingredients.map((ingredient) => ingredient.toJson()).toList(),
+      'stockQuantity': stockQuantity,
+      'stockStatus': stockStatus,
     };
   }
 
@@ -42,8 +48,15 @@ class MenuItem {
       ingredients: (json['ingredients'] as List?)
           ?.map((ingredient) => Ingredient.fromJson(ingredient))
           .toList() ?? [],
+      stockQuantity: json['stockQuantity']?.toInt(),
+      stockStatus: json['stockStatus']?.toString(),
     );
   }
+
+  // Helper methods for stock status
+  bool get isOutOfStock => stockStatus == 'out of stock' || (stockQuantity != null && stockQuantity! <= 0);
+  bool get isLowStock => stockStatus == 'low stock';
+  bool get isInStock => stockStatus == 'in stock' || (!isOutOfStock && !isLowStock);
 }
 
 class AddOn {

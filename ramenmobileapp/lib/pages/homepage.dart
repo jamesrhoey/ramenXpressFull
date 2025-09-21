@@ -182,8 +182,116 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _alertController.dispose();
     super.dispose();
+  }
+
+  void _showOutOfStockDialog(BuildContext context, MenuItem item) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: Colors.orange[700],
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Item Unavailable',
+                  style: TextStyle(
+                    color: Colors.grey[800],
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${item.name} is currently out of stock.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.schedule,
+                      color: Colors.orange[700],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'We\'re working to restock this item. Please check back later or try our other delicious options!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.orange[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Browse Other Items',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Could implement notify me feature here
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('We\'ll notify you when ${item.name} is back in stock!'),
+                    backgroundColor: const Color(0xFFD32D43),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD32D43),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Notify Me'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showSweetAlertMessage(String message) {
@@ -1234,23 +1342,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               itemCount: filteredMenuItems.length,
                               itemBuilder: (context, index) {
                                 final item = filteredMenuItems[index];
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.06),
-                                        spreadRadius: 0,
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
+                                return Opacity(
+                                  opacity: item.isOutOfStock ? 0.5 : 1.0,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.06),
+                                          spreadRadius: 0,
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
                                   child: Material(
                                     color: Colors.transparent,
                                     child: InkWell(
-                                      onTap: () {
+                                      onTap: item.isOutOfStock ? () {
+                                        _showOutOfStockDialog(context, item);
+                                      } : () {
                                         _showAddOnsModal(context, item);
                                       },
                                       borderRadius: BorderRadius.circular(20),
@@ -1293,7 +1405,45 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                                     maxLines: 2,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
-                                                  const SizedBox(height: 8),
+                                                  const SizedBox(height: 4),
+                                                  // Stock status indicator
+                                                  if (item.isOutOfStock)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.red[50],
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: Colors.red[200]!, width: 1),
+                                                      ),
+                                                      child: Text(
+                                                        'Out of Stock',
+                                                        style: TextStyle(
+                                                          color: Colors.red[700],
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  else if (item.isLowStock)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.orange[50],
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: Colors.orange[200]!, width: 1),
+                                                      ),
+                                                      child: Text(
+                                                        item.stockQuantity != null && item.stockQuantity! > 0 
+                                                          ? 'Only ${item.stockQuantity} left'
+                                                          : 'Low Stock',
+                                                        style: TextStyle(
+                                                          color: Colors.orange[700],
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  const SizedBox(height: 4),
                                                   Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
@@ -1339,6 +1489,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                         ),
                                       ),
                                     ),
+                                  ),
                                   ),
                                 );
                               },

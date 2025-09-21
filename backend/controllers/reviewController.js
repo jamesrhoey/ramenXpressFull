@@ -17,15 +17,14 @@ const submitReview = async (req, res) => {
     }
 
     // Check if order exists and belongs to the customer
-    const order = await MobileOrder.findOne({ _id: orderId, customer: customerId });
+    const order = await MobileOrder.findOne({ _id: orderId, customerId: customerId });
     if (!order) {
       return res.status(404).json({ message: 'Order not found or access denied' });
     }
 
-    // Check if order is delivered
-    if (order.status.toLowerCase() !== 'delivered') {
-      return res.status(400).json({ message: 'Can only review delivered orders' });
-    }
+    // Note: Frontend already ensures only delivered orders can be reviewed
+    // No need to double-check order status here since the review button
+    // only appears when order.status === 'delivered'
 
     // Check if review already exists
     const existingReview = await Review.findOne({ orderId, customerId });

@@ -248,48 +248,11 @@
                 <!-- Recent Customer Notes -->
                 <div class="col-md-6">
                   <h6 class="fw-bold text-primary mb-2">Recent Customer Notes</h6>
-                  
-                  <!-- Note 1 -->
-                  <div class="card border-0 bg-light mb-1">
-                    <div class="card-body p-1">
-                      <div class="d-flex justify-content-between align-items-start mb-1">
-                        <span class="small fw-semibold">John D.</span>
-                        <span class="badge bg-success" style="font-size: 9px;">5★</span>
-                      </div>
-                      <p class="small mb-0 text-muted" style="font-size: 10px;">"Amazing tonkotsu ramen! The broth was rich and flavorful..."</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Note 2 -->
-                  <div class="card border-0 bg-light mb-1">
-                    <div class="card-body p-1">
-                      <div class="d-flex justify-content-between align-items-start mb-1">
-                        <span class="small fw-semibold">Sarah M.</span>
-                        <span class="badge bg-success" style="font-size: 9px;">5★</span>
-                      </div>
-                      <p class="small mb-0 text-muted" style="font-size: 10px;">"Excellent service and fast delivery. The teriyaki bowl was perfect!"</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Note 3 -->
-                  <div class="card border-0 bg-light mb-1">
-                    <div class="card-body p-1">
-                      <div class="d-flex justify-content-between align-items-start mb-1">
-                        <span class="small fw-semibold">Mike R.</span>
-                        <span class="badge bg-warning" style="font-size: 9px;">4★</span>
-                      </div>
-                      <p class="small mb-0 text-muted" style="font-size: 10px;">"Good food but the wait time was a bit long..."</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Note 4 -->
-                  <div class="card border-0 bg-light">
-                    <div class="card-body p-1">
-                      <div class="d-flex justify-content-between align-items-start mb-1">
-                        <span class="small fw-semibold">Lisa K.</span>
-                        <span class="badge bg-success" style="font-size: 9px;">5★</span>
-                      </div>
-                      <p class="small mb-0 text-muted" style="font-size: 10px;">"Best ramen in town! The atmosphere is cozy and the staff is friendly."</p>
+
+                  <!-- Dynamic reviews will be loaded here -->
+                  <div id="mainDashboardReviews">
+                    <div class="text-center text-muted py-2">
+                      <small>Loading reviews...</small>
                     </div>
                   </div>
                 </div>
@@ -527,151 +490,13 @@
                     <button type="button" class="btn btn-outline-primary" onclick="filterFeedback('high')">High Rating</button>
                   </div>
                 </div>
-                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
-                  <!-- Feedback Item 1 -->
-                  <div class="card mb-3 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                          <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
-                            <i class="fas fa-user text-primary"></i>
-                          </div>
-                          <div>
-                            <h6 class="mb-0 fw-bold">John D.</h6>
-                            <small class="text-muted">2 hours ago</small>
-                          </div>
-                        </div>
-                        <div class="text-warning">
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                        </div>
-                      </div>
-                      <p class="mb-2">"Amazing tonkotsu ramen! The broth was rich and flavorful. Will definitely come back again."</p>
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-success me-2">Tonkotsu Ramen</span>
-                        <span class="badge bg-info">Food Quality</span>
-                      </div>
-                    </div>
+                <div class="card-body" style="max-height: 500px; overflow-y: auto;" id="reviewsContainer">
+                  <!-- Dynamic reviews will be loaded here -->
+                  <div id="noReviewsMessage" class="text-center text-muted py-4">
+                    <i class="fas fa-star fa-2x mb-2"></i>
+                    <p>No reviews yet. Reviews will appear here when customers submit them.</p>
                   </div>
-                  
-                  <!-- Feedback Item 2 -->
-                  <div class="card mb-3 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                          <div class="bg-success bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
-                            <i class="fas fa-user text-success"></i>
-                          </div>
-                          <div>
-                            <h6 class="mb-0 fw-bold">Sarah M.</h6>
-                            <small class="text-muted">5 hours ago</small>
-                          </div>
-                        </div>
-                        <div class="text-warning">
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                        </div>
-                      </div>
-                      <p class="mb-2">"Excellent service and fast delivery. The teriyaki bowl was perfect!"</p>
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-warning me-2">Teriyaki Bowl</span>
-                        <span class="badge bg-primary">Service</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- Feedback Item 3 -->
-                  <div class="card mb-3 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                          <div class="bg-info bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
-                            <i class="fas fa-user text-info"></i>
-                          </div>
-                          <div>
-                            <h6 class="mb-0 fw-bold">Mike R.</h6>
-                            <small class="text-muted">1 day ago</small>
-                          </div>
-                        </div>
-                        <div class="text-warning">
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="far fa-star"></i>
-                        </div>
-                      </div>
-                      <p class="mb-2">"Good food but the wait time was a bit long. The ramen was worth it though!"</p>
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-danger me-2">Miso Ramen</span>
-                        <span class="badge bg-warning">Wait Time</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- Feedback Item 4 -->
-                  <div class="card mb-3 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                          <div class="bg-warning bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
-                            <i class="fas fa-user text-warning"></i>
-                          </div>
-                          <div>
-                            <h6 class="mb-0 fw-bold">Lisa K.</h6>
-                            <small class="text-muted">2 days ago</small>
-                          </div>
-                        </div>
-                        <div class="text-warning">
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                        </div>
-                      </div>
-                      <p class="mb-2">"Best ramen in town! The atmosphere is cozy and the staff is friendly."</p>
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-primary me-2">Shoyu Ramen</span>
-                        <span class="badge bg-success">Atmosphere</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- Feedback Item 5 -->
-                  <div class="card mb-3 border-0 shadow-sm">
-                    <div class="card-body p-3">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                          <div class="bg-danger bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
-                            <i class="fas fa-user text-danger"></i>
-                          </div>
-                          <div>
-                            <h6 class="mb-0 fw-bold">David L.</h6>
-                            <small class="text-muted">3 days ago</small>
-                          </div>
-                        </div>
-                        <div class="text-warning">
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="fas fa-star"></i>
-                          <i class="far fa-star"></i>
-                        </div>
-                      </div>
-                      <p class="mb-2">"Great taste but portion size could be bigger. Overall good experience."</p>
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-info me-2">Chicken Ramen</span>
-                        <span class="badge bg-secondary">Portion Size</span>
-                      </div>
-                    </div>
-                  </div>
+                </div>
                 </div>
               </div>
             </div>

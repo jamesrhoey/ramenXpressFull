@@ -2,14 +2,83 @@ const Menu = require('../models/menu');
 const Inventory = require('../models/inventory');
 const Settings = require('../models/settings');
 
-// Get all menu items
+// Get all menu items with inventory information based on ingredients
 const getAllMenu = async (req, res) => {
   try {
     const menuItems = await Menu.find({});
+    
+    // Enrich menu items with inventory information based on ingredients
+    const enrichedMenuItems = await Promise.all(
+      menuItems.map(async (menuItem) => {
+        let stockQuantity = null;
+        let stockStatus = 'in stock';
+        
+        // Check if menu item has ingredients
+        if (menuItem.ingredients && menuItem.ingredients.length > 0) {
+          let minAvailablePortions = Infinity;
+          let hasOutOfStockIngredient = false;
+          let hasLowStockIngredient = false;
+          
+          // Check each ingredient's availability
+          for (const ingredient of menuItem.ingredients) {
+            const inventoryItem = await Inventory.findOne({ name: ingredient.inventoryItem });
+            
+            if (inventoryItem) {
+              // Calculate how many portions can be made with this ingredient
+              const availablePortions = Math.floor(inventoryItem.stocks / ingredient.quantity);
+              
+              // Track the limiting ingredient (lowest available portions)
+              if (availablePortions < minAvailablePortions) {
+                minAvailablePortions = availablePortions;
+              }
+              
+              // Check if any ingredient is out of stock
+              if (inventoryItem.stocks <= 0 || availablePortions <= 0) {
+                hasOutOfStockIngredient = true;
+              }
+              // Check if any ingredient is low stock
+              else if (inventoryItem.status === 'low stock' || availablePortions <= 10) {
+                hasLowStockIngredient = true;
+              }
+            } else {
+              // If ingredient not found in inventory, assume out of stock
+              hasOutOfStockIngredient = true;
+              minAvailablePortions = 0;
+            }
+          }
+          
+          // Set stock quantity to the maximum number of portions that can be made
+          stockQuantity = minAvailablePortions === Infinity ? null : minAvailablePortions;
+          
+          // Determine overall stock status
+          if (hasOutOfStockIngredient || minAvailablePortions <= 0) {
+            stockStatus = 'out of stock';
+          } else if (hasLowStockIngredient || minAvailablePortions <= 10) {
+            stockStatus = 'low stock';
+          } else {
+            stockStatus = 'in stock';
+          }
+        } else {
+          // Fallback: check for inventory item with menu item name
+          const inventoryItem = await Inventory.findOne({ name: menuItem.name });
+          if (inventoryItem) {
+            stockQuantity = inventoryItem.stocks;
+            stockStatus = inventoryItem.status;
+          }
+        }
+        
+        return {
+          ...menuItem.toObject(),
+          stockQuantity: stockQuantity,
+          stockStatus: stockStatus,
+        };
+      })
+    );
+    
     res.status(200).json({
       success: true,
-      count: menuItems.length,
-      data: menuItems
+      count: enrichedMenuItems.length,
+      data: enrichedMenuItems
     });
   } catch (error) {
     res.status(500).json({
@@ -43,14 +112,83 @@ const getMenuById = async (req, res) => {
   }
 };
 
-// Get add-ons (menu items with category 'add-ons')
+// Get add-ons (menu items with category 'add-ons') with inventory information
 const getAddOns = async (req, res) => {
   try {
     const addOns = await Menu.find({ category: 'add-ons' });
+    
+    // Enrich add-ons with inventory information based on ingredients
+    const enrichedAddOns = await Promise.all(
+      addOns.map(async (addOn) => {
+        let stockQuantity = null;
+        let stockStatus = 'in stock';
+        
+        // Check if add-on has ingredients
+        if (addOn.ingredients && addOn.ingredients.length > 0) {
+          let minAvailablePortions = Infinity;
+          let hasOutOfStockIngredient = false;
+          let hasLowStockIngredient = false;
+          
+          // Check each ingredient's availability
+          for (const ingredient of addOn.ingredients) {
+            const inventoryItem = await Inventory.findOne({ name: ingredient.inventoryItem });
+            
+            if (inventoryItem) {
+              // Calculate how many portions can be made with this ingredient
+              const availablePortions = Math.floor(inventoryItem.stocks / ingredient.quantity);
+              
+              // Track the limiting ingredient (lowest available portions)
+              if (availablePortions < minAvailablePortions) {
+                minAvailablePortions = availablePortions;
+              }
+              
+              // Check if any ingredient is out of stock
+              if (inventoryItem.stocks <= 0 || availablePortions <= 0) {
+                hasOutOfStockIngredient = true;
+              }
+              // Check if any ingredient is low stock
+              else if (inventoryItem.status === 'low stock' || availablePortions <= 10) {
+                hasLowStockIngredient = true;
+              }
+            } else {
+              // If ingredient not found in inventory, assume out of stock
+              hasOutOfStockIngredient = true;
+              minAvailablePortions = 0;
+            }
+          }
+          
+          // Set stock quantity to the maximum number of portions that can be made
+          stockQuantity = minAvailablePortions === Infinity ? null : minAvailablePortions;
+          
+          // Determine overall stock status
+          if (hasOutOfStockIngredient || minAvailablePortions <= 0) {
+            stockStatus = 'out of stock';
+          } else if (hasLowStockIngredient || minAvailablePortions <= 10) {
+            stockStatus = 'low stock';
+          } else {
+            stockStatus = 'in stock';
+          }
+        } else {
+          // Fallback: check for inventory item with add-on name (common for simple add-ons)
+          const inventoryItem = await Inventory.findOne({ name: addOn.name });
+          if (inventoryItem) {
+            stockQuantity = inventoryItem.stocks;
+            stockStatus = inventoryItem.status;
+          }
+        }
+        
+        return {
+          ...addOn.toObject(),
+          stockQuantity: stockQuantity,
+          stockStatus: stockStatus,
+        };
+      })
+    );
+    
     res.status(200).json({
       success: true,
-      count: addOns.length,
-      data: addOns
+      count: enrichedAddOns.length,
+      data: enrichedAddOns
     });
   } catch (error) {
     res.status(500).json({
@@ -389,16 +527,84 @@ const deleteMenu = async (req, res) => {
   }
 };
 
-// Get menu items by category
+// Get menu items by category with inventory information based on ingredients
 const getMenuByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const menuItems = await Menu.find({ category });
     
+    // Enrich menu items with inventory information based on ingredients
+    const enrichedMenuItems = await Promise.all(
+      menuItems.map(async (menuItem) => {
+        let stockQuantity = null;
+        let stockStatus = 'in stock';
+        
+        // Check if menu item has ingredients
+        if (menuItem.ingredients && menuItem.ingredients.length > 0) {
+          let minAvailablePortions = Infinity;
+          let hasOutOfStockIngredient = false;
+          let hasLowStockIngredient = false;
+          
+          // Check each ingredient's availability
+          for (const ingredient of menuItem.ingredients) {
+            const inventoryItem = await Inventory.findOne({ name: ingredient.inventoryItem });
+            
+            if (inventoryItem) {
+              // Calculate how many portions can be made with this ingredient
+              const availablePortions = Math.floor(inventoryItem.stocks / ingredient.quantity);
+              
+              // Track the limiting ingredient (lowest available portions)
+              if (availablePortions < minAvailablePortions) {
+                minAvailablePortions = availablePortions;
+              }
+              
+              // Check if any ingredient is out of stock
+              if (inventoryItem.stocks <= 0 || availablePortions <= 0) {
+                hasOutOfStockIngredient = true;
+              }
+              // Check if any ingredient is low stock
+              else if (inventoryItem.status === 'low stock' || availablePortions <= 10) {
+                hasLowStockIngredient = true;
+              }
+            } else {
+              // If ingredient not found in inventory, assume out of stock
+              hasOutOfStockIngredient = true;
+              minAvailablePortions = 0;
+            }
+          }
+          
+          // Set stock quantity to the maximum number of portions that can be made
+          stockQuantity = minAvailablePortions === Infinity ? null : minAvailablePortions;
+          
+          // Determine overall stock status
+          if (hasOutOfStockIngredient || minAvailablePortions <= 0) {
+            stockStatus = 'out of stock';
+          } else if (hasLowStockIngredient || minAvailablePortions <= 10) {
+            stockStatus = 'low stock';
+          } else {
+            stockStatus = 'in stock';
+          }
+        } else {
+          // Fallback: check for inventory item with menu item name
+          const inventoryItem = await Inventory.findOne({ name: menuItem.name });
+          if (inventoryItem) {
+            stockQuantity = inventoryItem.stocks;
+            stockStatus = inventoryItem.status;
+          }
+        }
+        
+        return {
+          ...menuItem.toObject(),
+          stockQuantity: stockQuantity,
+          stockStatus: stockStatus,
+        };
+      })
+    );
+    
     res.status(200).json({
       success: true,
-      count: menuItems.length,
-      data: menuItems
+      count: enrichedMenuItems.length,
+      data: enrichedMenuItems
     });
   } catch (error) {
     res.status(500).json({

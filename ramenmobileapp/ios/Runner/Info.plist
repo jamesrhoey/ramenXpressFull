@@ -49,5 +49,16 @@
 	<string>This app needs location access to help you select your delivery address on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs location access to help you select your delivery address on the map.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ramenxpress.payment</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ramenxpress</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -47,13 +47,18 @@ function filterFeedback(type) {
   document.querySelectorAll('.btn-group .btn').forEach(btn => {
     btn.classList.remove('active');
   });
-  
+
   // Add active class to clicked button
   event.target.classList.add('active');
-  
+
   // Here you would implement the actual filtering logic
   // For now, we'll just show a message
   console.log(`Filtering feedback by: ${type}`);
+
+  // TODO: Implement actual filtering based on review data
+  // - 'all': Show all reviews
+  // - 'recent': Show reviews from last 7 days
+  // - 'high': Show reviews with rating >= 4
 }
 
 // Time period filtering for sales data
@@ -432,7 +437,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const feedbackModal = document.getElementById('feedbackModal');
   if (feedbackModal) {
     feedbackModal.addEventListener('shown.bs.modal', function() {
-      initializeFoodRatingChart();
+      // Load real reviews when modal is opened
+      loadReviewsData();
     });
   }
 
@@ -496,170 +502,274 @@ function initializeFoodRatingChart() {
   });
 }
 
-// Function to load dashboard data from API
-async function loadDashboardData() {
+// Function to load reviews data from API
+async function loadReviewsData() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const token = user.token;
   
   if (!token || typeof getApiUrl !== 'function') {
-    console.log('No token or API URL function available');
+    console.log('No token or API URL function available for reviews');
     return;
   }
 
   try {
-    // Calculate this week's date range
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6); // End of current week (Saturday)
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    // Fetch sales summary data for this week
-    const salesResponse = await fetch(`${getApiUrl()}/sales/sales-summary?period=week`, {
+    // Fetch all reviews
+    const reviewsResponse = await fetch(`${getApiUrl()}/reviews?limit=5`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
 
-    if (!salesResponse.ok) {
-      throw new Error(`Sales API Error: ${salesResponse.status}`);
+    if (!reviewsResponse.ok) {
+      throw new Error(`Reviews API Error: ${reviewsResponse.status}`);
     }
 
-    const salesData = await salesResponse.json();
-    
-    // Fetch mobile orders for this week
-    const mobileOrdersResponse = await fetch(`${getApiUrl()}/mobile-orders/all`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const reviewsData = await reviewsResponse.json();
 
-    let mobileOrdersData = { orders: [] };
-    if (mobileOrdersResponse.ok) {
-      const allMobileOrders = await mobileOrdersResponse.json();
-      // Filter mobile orders for this week
-      mobileOrdersData.orders = allMobileOrders.filter(order => {
-        const orderDate = new Date(order.createdAt);
-        return orderDate >= startOfWeek && orderDate <= endOfWeek;
-      });
-    } else {
-      console.warn('Failed to fetch mobile orders:', mobileOrdersResponse.status);
-    }
+    // Update the feedback section with real data
+    updateFeedbackSection(reviewsData.reviews || []);
 
-    // Calculate combined totals
-    let totalSales = 0;
-    let totalOrders = 0;
-    let mobileOrderRevenue = 0;
-    let mobileOrderCount = 0;
+    // Update main dashboard reviews section
+    updateMainDashboardReviews(reviewsData.reviews || []);
 
-    // Calculate POS sales totals
-    if (salesData.sales) {
-      totalSales = salesData.sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-      totalOrders = salesData.totalOrders || 0;
-    }
-
-    // Calculate mobile order totals
-    if (mobileOrdersData.orders) {
-      mobileOrderRevenue = mobileOrdersData.orders.reduce((sum, order) => sum + (order.total || 0), 0);
-      mobileOrderCount = mobileOrdersData.orders.length;
-    }
-
-    // Update Total Sales card with combined data
-    const totalSalesElement = document.getElementById('totalSalesCard');
-    if (totalSalesElement) {
-      const combinedSales = totalSales + mobileOrderRevenue;
-      totalSalesElement.textContent = `₱${combinedSales.toLocaleString()}`;
-      totalSalesElement.className = 'fw-bold mb-2 text-success';
-    }
-
-    // Update Total Orders card with combined data
-    const totalOrdersElement = document.getElementById('totalOrdersCard');
-    if (totalOrdersElement) {
-      const combinedOrders = totalOrders + mobileOrderCount;
-      totalOrdersElement.textContent = combinedOrders.toString();
-      totalOrdersElement.className = 'fw-bold mb-2';
-    }
-
-
-    // Fetch customer count data for this week
-    const customerResponse = await fetch(`${getApiUrl()}/customers/count?period=week`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    let customerData = null;
-    if (customerResponse.ok) {
-      customerData = await customerResponse.json();
-      
-      // Update New Customer card
-      const newCustomerElement = document.getElementById('newCustomerCard');
-      if (newCustomerElement) {
-        newCustomerElement.textContent = customerData.totalNewCustomers || '0';
-        newCustomerElement.className = 'fw-bold mb-2 text-info';
-      }
-    } else {
-      // Show error for customer data
-      const newCustomerElement = document.getElementById('newCustomerCard');
-      if (newCustomerElement) {
-        newCustomerElement.textContent = 'Error';
-        newCustomerElement.className = 'fw-bold mb-2 text-danger';
-      }
-    }
-
-    // Add mobile order metrics to console for debugging
-    console.log('Dashboard data loaded successfully:', { 
-      salesData, 
-      customerData, 
-      mobileOrdersData,
-      combinedMetrics: {
-        totalSales: totalSales + mobileOrderRevenue,
-        totalOrders: totalOrders + mobileOrderCount,
-        posSales: totalSales,
-        posOrders: totalOrders,
-        mobileRevenue: mobileOrderRevenue,
-        mobileOrders: mobileOrderCount
-      }
-    });
-
-    // Store mobile order data for potential future use
-    window.dashboardMobileOrders = mobileOrdersData.orders;
+    console.log('Reviews data loaded successfully:', reviewsData);
 
   } catch (error) {
-    console.error('Error loading dashboard data:', error);
-    
-    // Show error messages in the cards
-    const totalSalesElement = document.getElementById('totalSalesCard');
-    if (totalSalesElement) {
-      totalSalesElement.textContent = 'Error';
-      totalSalesElement.className = 'fw-bold mb-2 text-danger';
+    console.error('Error loading reviews data:', error);
+    // Show error message in the modal
+    const reviewsContainer = document.getElementById('reviewsContainer');
+    const noReviewsMessage = document.getElementById('noReviewsMessage');
+
+    if (reviewsContainer && noReviewsMessage) {
+      reviewsContainer.innerHTML = `
+        <div class="text-center text-danger py-4">
+          <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+          <p>Failed to load reviews. Please check your connection and try again.</p>
+          <small class="text-muted">${error.message}</small>
+        </div>
+      `;
+      noReviewsMessage.style.display = 'none';
     }
 
-    const totalOrdersElement = document.getElementById('totalOrdersCard');
-    if (totalOrdersElement) {
-      totalOrdersElement.textContent = 'Error';
-      totalOrdersElement.className = 'fw-bold mb-2 text-danger';
+    // Also update main dashboard with error message
+    const mainDashboardReviews = document.getElementById('mainDashboardReviews');
+    if (mainDashboardReviews) {
+      mainDashboardReviews.innerHTML = `
+        <div class="text-center text-danger py-2">
+          <small>Unable to load reviews</small>
+        </div>
+      `;
     }
-
-    const newCustomerElement = document.getElementById('newCustomerCard');
-    if (newCustomerElement) {
-      newCustomerElement.textContent = 'Error';
-      newCustomerElement.className = 'fw-bold mb-2 text-danger';
-    }
-
   }
+
+// Update feedback section with real review data
+function updateFeedbackSection(reviews) {
+  const reviewsContainer = document.getElementById('reviewsContainer');
+  const noReviewsMessage = document.getElementById('noReviewsMessage');
+
+  // Clear existing content
+  if (reviewsContainer) {
+    reviewsContainer.innerHTML = '';
+  }
+
+  // Show no reviews message if no reviews
+  if (!reviews || reviews.length === 0) {
+    if (noReviewsMessage) {
+      noReviewsMessage.style.display = 'block';
+    }
+    return;
+  }
+
+  // Hide no reviews message
+  if (noReviewsMessage) {
+    noReviewsMessage.style.display = 'none';
+  }
+
+  // Check if reviewsContainer exists
+  if (!reviewsContainer) {
+    console.error('Reviews container not found');
+    return;
+  }
+
+  // Display reviews
+  reviews.forEach(review => {
+    const customerName = review.customerId?.name || 'Anonymous Customer';
+    const orderNumber = review.orderId?.orderNumber || 'N/A';
+    const rating = review.rating || 0;
+    const comment = review.comment || 'No comment provided';
+    const createdAt = new Date(review.createdAt).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Generate star rating HTML
+    let starsHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      if (i <= rating) {
+        starsHTML += '<i class="fas fa-star text-warning"></i>';
+      } else {
+        starsHTML += '<i class="far fa-star text-muted"></i>';
+      }
+    }
+
+    // Create review card HTML
+    const reviewHTML = `
+      <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="d-flex align-items-center">
+              <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                <i class="fas fa-user text-primary"></i>
+              </div>
+              <div>
+                <h6 class="mb-0 fw-bold">${customerName}</h6>
+                <small class="text-muted">${createdAt}</small>
+              </div>
+            </div>
+            <div class="text-warning">
+              ${starsHTML}
+            </div>
+          </div>
+          <p class="mb-2">${comment}</p>
+          <div class="d-flex align-items-center">
+            <span class="badge bg-success me-2">Order #${orderNumber}</span>
+            <span class="badge bg-info">${rating}/5 Stars</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add review to container
+    reviewsContainer.innerHTML += reviewHTML;
+  });
+}
+
+  // Display reviews
+  reviews.forEach(review => {
+    const customerName = review.customerId?.name || 'Anonymous Customer';
+    const orderNumber = review.orderId?.orderNumber || 'N/A';
+    const rating = review.rating || 0;
+    const comment = review.comment || 'No comment provided';
+    const createdAt = new Date(review.createdAt).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Generate star rating HTML
+    let starsHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      if (i <= rating) {
+        starsHTML += '<i class="fas fa-star text-warning"></i>';
+      } else {
+        starsHTML += '<i class="far fa-star text-muted"></i>';
+      }
+    }
+
+    // Create review card HTML
+    const reviewHTML = `
+      <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="d-flex align-items-center">
+              <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                <i class="fas fa-user text-primary"></i>
+              </div>
+              <div>
+                <h6 class="mb-0 fw-bold">${customerName}</h6>
+                <small class="text-muted">${createdAt}</small>
+              </div>
+            </div>
+            <div class="text-warning">
+              ${starsHTML}
+            </div>
+          </div>
+          <p class="mb-2">${comment}</p>
+          <div class="d-flex align-items-center">
+            <span class="badge bg-success me-2">Order #${orderNumber}</span>
+            <span class="badge bg-info">${rating}/5 Stars</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add review to container
+    reviewsContainer.innerHTML += reviewHTML;
+  });
+}
+
+// Update main dashboard reviews section with recent reviews
+function updateMainDashboardReviews(reviews) {
+  const mainDashboardReviews = document.getElementById('mainDashboardReviews');
+
+  if (!mainDashboardReviews) return;
+
+  // Clear existing content
+  mainDashboardReviews.innerHTML = '';
+
+  // Show message if no reviews
+  if (!reviews || reviews.length === 0) {
+    mainDashboardReviews.innerHTML = `
+      <div class="text-center text-muted py-2">
+        <small>No reviews yet</small>
+      </div>
+    `;
+    return;
+  }
+
+  // Show only the 3 most recent reviews
+  const recentReviews = reviews.slice(0, 3);
+
+  recentReviews.forEach(review => {
+    const customerName = review.customerId?.name || 'Anonymous Customer';
+    const rating = review.rating || 0;
+    const comment = review.comment || 'No comment provided';
+    const shortComment = comment.length > 60 ? comment.substring(0, 60) + '...' : comment;
+
+    // Generate star rating HTML (smaller for dashboard)
+    let starsHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      if (i <= rating) {
+        starsHTML += '<i class="fas fa-star text-warning" style="font-size: 10px;"></i>';
+      } else {
+        starsHTML += '<i class="far fa-star text-muted" style="font-size: 10px;"></i>';
+      }
+    }
+
+    // Get rating badge color
+    let badgeClass = 'bg-success';
+    if (rating < 3) badgeClass = 'bg-danger';
+    else if (rating < 4) badgeClass = 'bg-warning';
+
+    const reviewHTML = `
+      <div class="card border-0 bg-light mb-1">
+        <div class="card-body p-1">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="small fw-semibold">${customerName.split(' ')[0]}</span>
+            <span class="badge ${badgeClass}" style="font-size: 9px;">${rating}★</span>
+          </div>
+          <p class="small mb-0 text-muted" style="font-size: 10px;">"${shortComment}"</p>
+        </div>
+      </div>
+    `;
+
+    mainDashboardReviews.innerHTML += reviewHTML;
+  });
 }
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
   // Load dashboard data first
   loadDashboardData();
+
+  // Load reviews data
+  loadReviewsData();
   
   const sidebarToggle = document.getElementById('sidebarToggle');
   const sidebarMenu = document.getElementById('sidebarMenu');

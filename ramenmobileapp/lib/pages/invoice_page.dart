@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-import '../services/socket_service.dart';
 import '../services/notification_service.dart';
+import '../services/socket_service.dart';
 import '../widgets/delivery_animation.dart';
+import '../widgets/review_dialog.dart';
 
 class InvoicePage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -457,23 +458,27 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   void _showReviewDialog() {
-    NotificationService.showQuestionDialog(
+    showDialog(
       context: context,
-      title: 'Rate Your Order',
-      message: 'How was your experience? Please rate from 1-5 stars.',
-      onOkPressed: () {
-        // For now, submit a default 5-star rating
-        // In a real implementation, you'd want a custom dialog for star rating
-        _submitReview(5, 'Great experience!');
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ReviewDialog(
+          onSubmit: (int rating, String comment) {
+            Navigator.of(context).pop(); // Close dialog
+            _submitReview(rating, comment);
+          },
+          onCancel: () {
+            Navigator.of(context).pop(); // Close dialog
+          },
+        );
       },
-      onCancelPressed: () {},
     );
   }
 
   void _submitReview(int rating, String comment) async {
     try {
       // Show loading
-      NotificationService.showLoadingDialog(context, message: 'Cancelling order...');
+      NotificationService.showLoadingDialog(context, message: 'Submitting review...');
 
       final orderId = order['id'] ?? order['_id'];
       await ApiService().submitReview(orderId.toString(), rating, comment);

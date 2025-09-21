@@ -92,6 +92,14 @@ class OrderService {
     } catch (e) {
       developer.log('Error creating order via API: $e', name: 'OrderService');
       
+      // Check if it's an inventory-related error and rethrow with better message
+      final errorMessage = e.toString();
+      if (errorMessage.contains('Insufficient stock') || 
+          errorMessage.contains('out of stock') || 
+          errorMessage.contains('Available:')) {
+        throw Exception(errorMessage.replaceAll('Exception: ', ''));
+      }
+      
       // Fallback to local storage if API fails
     final orderId = _generateOrderId();
     final invoiceNumber = _generateInvoiceNumber();

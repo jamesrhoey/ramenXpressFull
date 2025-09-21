@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -252,7 +253,12 @@ class ApiService {
         } else {
           data = [];
         }
-        return data.map((item) => MenuItem.fromJson(item)).toList();
+        final menuItems = data.map((item) => MenuItem.fromJson(item)).toList();
+        // Debug: Check if stock information is present
+        for (var item in menuItems.take(3)) { // Check first 3 items
+          print('🔍 Menu Item: ${item.name}, Stock: ${item.stockQuantity}, Status: ${item.stockStatus}');
+        }
+        return menuItems;
       }
       throw Exception('Failed to fetch menu items');
     } on DioException catch (e) {
@@ -279,6 +285,10 @@ class ApiService {
           print('⚠️ API: Unknown response format, using empty list');
         }
         final menuItems = data.map((item) => MenuItem.fromJson(item)).toList();
+        // Debug: Check if stock information is present
+        for (var item in menuItems.take(3)) { // Check first 3 items
+          print('🔍 Category Menu Item: ${item.name}, Stock: ${item.stockQuantity}, Status: ${item.stockStatus}');
+        }
         print('✅ API: Successfully parsed ${menuItems.length} menu items');
         return menuItems;
       }
@@ -732,8 +742,28 @@ class ApiService {
         throw Exception('Authentication required');
       }
       
+      print('🌟 Submitting review:');
+      print('📋 Order ID: $orderId');
+      print('⭐ Rating: $rating');
+      print('💬 Comment: $comment');
+      print('🔐 Token length: ${token.length}');
+      print('🔐 Token preview: ${token.substring(0, math.min(30, token.length))}...');
+      print('🌐 URL: ${_dio.options.baseUrl}/reviews');
+      
+      // Test token validity by trying to decode it
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          print('✅ Token appears to be a valid JWT format');
+        } else {
+          print('❌ Token does not appear to be JWT format');
+        }
+      } catch (e) {
+        print('❌ Error checking token format: $e');
+      }
+      
       final response = await _dio.post(
-        '/api/v1/reviews',
+        '/reviews',
         data: {
           'orderId': orderId,
           'rating': rating,
@@ -744,11 +774,32 @@ class ApiService {
         ),
       );
 
+      print('✅ Review submitted successfully: ${response.statusCode}');
+      print('📄 Response: ${response.data}');
+
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to submit review');
       }
     } catch (e) {
-      print('Error submitting review: $e');
+      print('❌ Error submitting review: $e');
+      if (e is DioException) {
+        print('🔍 Error type: ${e.type}');
+        print('🔍 Error response: ${e.response?.data}');
+        print('🔍 Error status: ${e.response?.statusCode}');
+        print('🔍 Request URL: ${e.requestOptions.uri}');
+        print('🔍 Request headers: ${e.requestOptions.headers}');
+        
+        // Provide more specific error messages
+        if (e.response?.statusCode == 404) {
+          throw Exception('Review endpoint not found. Please check if the server is running and the reviews API is available.');
+        } else if (e.response?.statusCode == 401) {
+          throw Exception('Authentication failed. Please log in again.');
+        } else if (e.response?.statusCode == 403) {
+          throw Exception('You can only review delivered orders.');
+        } else {
+          throw Exception('Failed to submit review: ${e.response?.data?['message'] ?? e.message}');
+        }
+      }
       throw Exception('Failed to submit review: $e');
     }
   }
