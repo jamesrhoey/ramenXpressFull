@@ -4,114 +4,27 @@ import 'api_service.dart';
 class MenuService {
   final ApiService _apiService = ApiService();
   
-  // Example categories
-  List<String> categories = ['All', 'Ramen', 'Rice Bowl', 'Sides', 'Drinks', 'add-ons'];
+  // Categories matching backend Menu model
+  List<String> categories = ['All', 'ramen', 'rice bowls', 'side dishes', 'sushi', 'party trays', 'add-ons', 'drinks'];
 
-  // Fallback menu items if API fails
-  final List<MenuItem> _fallbackMenuItems = [
-    MenuItem(
-      id: '1',
-      name: 'Classic Ramen',
-      price: 199.0,
-      image: 'assets/ramen1.jpg',
-      category: 'Ramen',
-      availableAddOns: [
-        AddOn(name: 'Egg', price: 20.0),
-        AddOn(name: 'Extra Noodles', price: 30.0),
-      ],
-    ),
-    MenuItem(
-      id: '2',
-      name: 'Spicy Ramen',
-      price: 219.0,
-      image: 'assets/ramen2.jpg',
-      category: 'Ramen',
-      availableAddOns: [
-        AddOn(name: 'Egg', price: 20.0),
-        AddOn(name: 'Extra Spicy', price: 15.0),
-      ],
-    ),
-    MenuItem(
-      id: '3',
-      name: 'Chicken Rice Bowl',
-      price: 149.0,
-      image: 'assets/ricebowl.jpg',
-      category: 'Rice Bowl',
-      availableAddOns: [
-        AddOn(name: 'Extra Chicken', price: 40.0),
-      ],
-    ),
-    MenuItem(
-      id: '4',
-      name: 'Gyoza',
-      price: 99.0,
-      image: 'assets/side1.jpg',
-      category: 'Sides',
-      availableAddOns: [
-        AddOn(name: 'Extra Sauce', price: 10.0),
-      ],
-    ),
-    MenuItem(
-      id: '5',
-      name: 'Coke',
-      price: 49.0,
-      image: 'assets/coke.webp',
-      category: 'Drinks',
-      availableAddOns: [],
-    ),
-  ];
-
-  // Fallback add-ons if API fails
-  final List<MenuItem> _fallbackAddOns = [
-    MenuItem(
-      id: 'addon1',
-      name: 'Extra Egg',
-      price: 20.0,
-      image: 'assets/side1.jpg',
-      category: 'add-ons',
-      availableAddOns: [],
-    ),
-    MenuItem(
-      id: 'addon2',
-      name: 'Extra Noodles',
-      price: 30.0,
-      image: 'assets/side2.jpg',
-      category: 'add-ons',
-      availableAddOns: [],
-    ),
-    MenuItem(
-      id: 'addon3',
-      name: 'Extra Chashu',
-      price: 50.0,
-      image: 'assets/side3.jpg',
-      category: 'add-ons',
-      availableAddOns: [],
-    ),
-    MenuItem(
-      id: 'addon4',
-      name: 'Extra Seaweed',
-      price: 15.0,
-      image: 'assets/side4.jpg',
-      category: 'add-ons',
-      availableAddOns: [],
-    ),
-  ];
 
   Future<List<MenuItem>> getMenuItemsByCategory(String category) async {
     try {
+      print('🔍 MenuService: Fetching items for category: $category');
       if (category == 'All') {
-        return await _apiService.getMenuItems();
+        print('📋 MenuService: Fetching all menu items');
+        final items = await _apiService.getMenuItems();
+        print('✅ MenuService: Got ${items.length} items for All category');
+        return items;
       }
-      return await _apiService.getMenuItemsByCategory(category);
+      print('📋 MenuService: Fetching items for specific category: $category');
+      final items = await _apiService.getMenuItemsByCategory(category);
+      print('✅ MenuService: Got ${items.length} items for category: $category');
+      return items;
     } catch (e) {
-      print('Error fetching menu items: $e');
-      // Return fallback data if API fails
-      if (category == 'All') {
-        return _fallbackMenuItems;
-      } else if (category == 'add-ons') {
-        return _fallbackAddOns;
-      }
-      return _fallbackMenuItems.where((item) => item.category == category).toList();
+      print('❌ MenuService Error fetching menu items for category $category: $e');
+      // Return empty list if API fails
+      return [];
     }
   }
 
@@ -123,10 +36,8 @@ class MenuService {
           .toList();
     } catch (e) {
       print('Error searching menu items: $e');
-      // Return fallback data if API fails
-      return _fallbackMenuItems
-        .where((item) => item.name.toLowerCase().contains(query.toLowerCase()))
-        .toList();
+      // Return empty list if API fails
+      return [];
     }
   }
 }

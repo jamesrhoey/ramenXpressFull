@@ -10,18 +10,22 @@ const mobileOrderSchema = new mongoose.Schema({
     menuItem: {
       id: { type: String, required: true },
       name: { type: String, required: true },
-      price: { type: Number, required: true }
+      price: { type: Number, required: true },
+      image: { type: String, required: true }
     },
     quantity: { type: Number, required: true },
     selectedAddOns: [{
       name: { type: String, required: true },
       price: { type: Number, required: true }
+    }],
+    removedIngredients: [{
+      type: String
     }]
   }],
   total: { type: Number, required: true },
   status: { 
     type: String, 
-    enum: ['pending', 'preparing', 'ready', 'delivered', 'cancelled'],
+    enum: ['pending', 'accepted', 'preparing', 'ready', 'out-for-delivery', 'delivered', 'cancelled'],
     default: 'pending'
   },
   orderDate: { 
@@ -49,4 +53,4 @@ const mobileOrderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model('MobileOrder', mobileOrderSchema); 
+module.exports = mongoose.model('MobileOrder', mobileOrderSchema);

@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
+import 'phone_verification_page.dart';
 
 class EmailVerificationPage extends StatefulWidget {
   final String email;
   final String purpose; // 'registration' or 'login'
+  final String? phoneNumber; // Optional phone number for registration flow
 
   const EmailVerificationPage({
     super.key,
     required this.email,
     required this.purpose,
+    this.phoneNumber,
   });
 
   @override
@@ -101,29 +105,38 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
       final api = ApiService();
       
       if (widget.purpose == 'registration') {
-        // For registration: verify OTP and complete registration
+        // For registration: verify OTP and proceed to phone verification
         await api.verifyOTP(widget.email, _otpCode, 'registration');
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Email verified! Registration completed successfully.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+          if (widget.phoneNumber != null) {
+            // Navigate to phone verification
+            NotificationService.showSuccess(context, 'Email verified! Now verify your phone number.');
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PhoneVerificationPage(
+                  phoneNumber: widget.phoneNumber!,
+                  isLogin: false,
+                  onVerificationSuccess: () {
+                    // After phone verification, go to login
+                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  },
+                ),
+              ),
+            );
+          } else {
+            // No phone number provided, complete registration
+            NotificationService.showSuccess(context, 'Email verified! Registration completed successfully.');
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+          }
         }
       } else {
         // For login: verify OTP then proceed to login
         await api.verifyOTP(widget.email, _otpCode, 'login');
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Email verified! Logging you in...'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          NotificationService.showSuccess(context, 'Email verified! Logging you in...');
           Navigator.pushReplacementNamed(context, '/home');
         }
       }
@@ -161,12 +174,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
       await api.resendOTP(widget.email, widget.purpose);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Verification code resent to your email'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        NotificationService.showSuccess(context, 'Verification code resent to your email');
         _startResendCountdown();
       }
     } catch (e) {

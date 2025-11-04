@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/delivery_animation.dart';
+import '../widgets/review_dialog.dart';
 
 class InvoicePage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -23,6 +26,10 @@ class _InvoicePageState extends State<InvoicePage> {
     order = widget.order;
     currencyFormat = NumberFormat.currency(symbol: '₱');
     dateFormat = DateFormat('MMM dd, yyyy hh:mm a');
+    
+    // Set socket context for notifications
+    SocketService().setContext(context);
+    
     // Listen for real-time order status updates
     SocketService().connect();
     _orderStatusUpdateHandler = (data) {
@@ -68,53 +75,30 @@ class _InvoicePageState extends State<InvoicePage> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return const Color.fromARGB(255, 88, 97, 255); // Blue
+        return const Color.fromARGB(255, 88, 97, 255);
       case 'preparing':
-        return const Color(0xFF1A1A1A); // Black
+        return const Color(0xFF1A1A1A); 
       case 'ready':
-        return Colors.blue; // Blue
+        return Colors.blue;
+      case 'outfordelivery':
+      case 'out for delivery':
+        return const Color.fromARGB(255, 255, 165, 0); 
       case 'delivered':
-        return const Color.fromARGB(255, 10, 180, 10); // Green
+        return const Color.fromARGB(255, 10, 180, 10); 
       case 'cancelled':
-        return const Color(0xFFD32D43); // Red
+        return const Color(0xFFD32D43); 
       default:
-        return const Color.fromARGB(255, 175, 175, 175); // Grey
+        return const Color.fromARGB(255, 175, 175, 175); 
     }
   }
 
-  Widget _buildStatusBadge(String status) {
-    Color color = _getStatusColor(status);
-    String label = status.toUpperCase();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1), // light yellow
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFD54F), width: 2),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.hourglass_empty, color: color, size: 28),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Order Status', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-              Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildOrderProgress(String status) {
     final steps = [
       'Pending',
       'Preparing',
       'Ready',
+      'Out for Delivery',
       'Delivered',
       'Cancelled',
     ];
@@ -122,6 +106,7 @@ class _InvoicePageState extends State<InvoicePage> {
       'Your order has been received',
       'Your food is being prepared',
       'Your order is ready for pickup/delivery',
+      'On the way to you!',
       'Order completed successfully',
       'Order was cancelled',
     ];
@@ -129,8 +114,10 @@ class _InvoicePageState extends State<InvoicePage> {
       'pending': 0,
       'preparing': 1,
       'ready': 2,
-      'delivered': 3,
-      'cancelled': 4,
+      'outfordelivery': 3,
+      'out for delivery': 3,
+      'delivered': 4,
+      'cancelled': 5,
     };
     int currentStep = statusMap[status.toLowerCase()] ?? 0;
     bool isCancelled = status.toLowerCase() == 'cancelled';
@@ -393,9 +380,63 @@ class _InvoicePageState extends State<InvoicePage> {
     );
   }
 
+  bool _canCancelOrder() {
+    final status = order['status']?.toString().toLowerCase() ?? '';
+    return status == 'pending';
+  }
+
+  Future<void> _cancelOrder() async {
+    // Show confirmation dialog
+    final shouldCancel = await NotificationService.showConfirmDialog(
+      context: context,
+      title: 'Cancel Order',
+      message: 'Are you sure you want to cancel this order?',
+      confirmText: 'Yes, Cancel',
+      cancelText: 'No',
+      confirmColor: Colors.red,
+    );
+
+    if (shouldCancel != true) return;
+
+    try {
+      // Show loading
+      NotificationService.showLoadingDialog(context, message: 'Cancelling order...');
+
+      final orderId = order['id'] ?? order['_id'];
+      await ApiService().cancelOrder(orderId.toString());
+      
+      // Close loading dialog
+      NotificationService.hideLoadingDialog(context);
+      
+      // Show success message
+      NotificationService.showSuccess(context, 'Order cancelled successfully');
+      
+      // Refresh order data from server to get the latest status
+      try {
+        final orderId = order['id'] ?? order['_id'];
+        final updatedOrder = await ApiService().getMobileOrderById(orderId.toString());
+        setState(() {
+          order = updatedOrder.toJson();
+        });
+      } catch (refreshError) {
+        // If refresh fails, at least update status locally
+        setState(() {
+          order['status'] = 'cancelled';
+        });
+      }
+      
+    } catch (e) {
+      // Close loading dialog
+      NotificationService.hideLoadingDialog(context);
+      
+      // Show error message
+      NotificationService.showError(context, 'Failed to cancel order: $e');
+    }
+  }
+
   bool _shouldShowAnimation(String status) {
-    return status.toLowerCase() == 'ready' ||
-           status.toLowerCase() == 'out for delivery' || 
+    return status.toLowerCase() == 'out for delivery' || 
+           status.toLowerCase() == 'outfordelivery' ||
            status.toLowerCase() == 'on the way';
   }
 
@@ -405,6 +446,7 @@ class _InvoicePageState extends State<InvoicePage> {
         return '15-20 minutes';
       case 'ready':
         return '5-10 minutes';
+      case 'outfordelivery':
       case 'out for delivery':
       case 'on the way':
         return '10-15 minutes';
@@ -412,6 +454,45 @@ class _InvoicePageState extends State<InvoicePage> {
         return 'Delivered';
       default:
         return 'Calculating...';
+    }
+  }
+
+  void _showReviewDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ReviewDialog(
+          onSubmit: (int rating, String comment) {
+            Navigator.of(context).pop(); // Close dialog
+            _submitReview(rating, comment);
+          },
+          onCancel: () {
+            Navigator.of(context).pop(); // Close dialog
+          },
+        );
+      },
+    );
+  }
+
+  void _submitReview(int rating, String comment) async {
+    try {
+      // Show loading
+      NotificationService.showLoadingDialog(context, message: 'Submitting review...');
+
+      final orderId = order['id'] ?? order['_id'];
+      await ApiService().submitReview(orderId.toString(), rating, comment);
+      
+      // Close loading dialog
+      NotificationService.hideLoadingDialog(context);
+      
+      // Show success message
+      NotificationService.showSuccess(context, 'Thank you for your review!');
+    } catch (e) {
+      // Close loading dialog
+      NotificationService.hideLoadingDialog(context);
+      
+      NotificationService.showError(context, 'Failed to submit review: $e');
     }
   }
 
@@ -455,7 +536,6 @@ class _InvoicePageState extends State<InvoicePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusBadge(order['status'] ?? 'pending'),
             // Add Lottie animation for delivery status
             if (_shouldShowAnimation(order['status'] ?? 'pending'))
               DeliveryStatusWidget(
@@ -473,6 +553,51 @@ class _InvoicePageState extends State<InvoicePage> {
             _buildOrderItems(),
             _buildOrderSummary(),
             const SizedBox(height: 24),
+            // Cancel order button (only show if order can be cancelled)
+            if (_canCancelOrder()) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _cancelOrder,
+                  child: const Text(
+                    'Cancel Order',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Show review button for delivered orders
+            if ((order['status'] ?? 'pending').toLowerCase() == 'delivered') ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _showReviewDialog(),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.star, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('Leave a Review', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

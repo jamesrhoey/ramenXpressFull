@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,7 +21,7 @@ class ApiService {
       // If testing on emulator, change this to:
       // - Android emulator: 'http://10.0.2.2:3000/api/v1'
       // - iOS simulator: 'http://localhost:3000/api/v1'
-      return 'http://192.168.0.105:3000/api/v1';
+      return 'http://192.168.0.106:3000/api/v1';
     } else {
       // Production mode - use hardcoded production URL
       return 'https://ramenb.onrender.com/api/v1';
@@ -123,14 +124,20 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> registerCustomer(String firstName, String lastName, String email, String password) async {
+  Future<Map<String, dynamic>> registerCustomer(String firstName, String lastName, String email, String password, {String? phoneNumber}) async {
     try {
-      final response = await _dio.post('/customers/register', data: {
+      final Map<String, dynamic> data = {
         'firstName': firstName,
         'lastName': lastName,
         'email': email,
         'password': password,
-      });
+      };
+      
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        data['phoneNumber'] = phoneNumber;
+      }
+      
+      final response = await _dio.post('/customers/register', data: data);
 
       if (response.statusCode == 201) {
         return response.data;
@@ -246,7 +253,12 @@ class ApiService {
         } else {
           data = [];
         }
-        return data.map((item) => MenuItem.fromJson(item)).toList();
+        final menuItems = data.map((item) => MenuItem.fromJson(item)).toList();
+        // Debug: Check if stock information is present
+        for (var item in menuItems.take(3)) { // Check first 3 items
+          print('🔍 Menu Item: ${item.name}, Stock: ${item.stockQuantity}, Status: ${item.stockStatus}');
+        }
+        return menuItems;
       }
       throw Exception('Failed to fetch menu items');
     } on DioException catch (e) {
@@ -256,20 +268,33 @@ class ApiService {
 
   Future<List<MenuItem>> getMenuItemsByCategory(String category) async {
     try {
+      print('🌐 API: Making request to /menu/category/$category');
       final response = await _dio.get('/menu/category/$category');
+      print('📡 API: Response status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         List<dynamic> data;
         if (response.data is Map) {
           data = response.data['data'] ?? response.data['items'] ?? [];
+          print('📦 API: Extracted ${data.length} items from Map response');
         } else if (response.data is List) {
           data = response.data;
+          print('📦 API: Got ${data.length} items from List response');
         } else {
           data = [];
+          print('⚠️ API: Unknown response format, using empty list');
         }
-        return data.map((item) => MenuItem.fromJson(item)).toList();
+        final menuItems = data.map((item) => MenuItem.fromJson(item)).toList();
+        // Debug: Check if stock information is present
+        for (var item in menuItems.take(3)) { // Check first 3 items
+          print('🔍 Category Menu Item: ${item.name}, Stock: ${item.stockQuantity}, Status: ${item.stockStatus}');
+        }
+        print('✅ API: Successfully parsed ${menuItems.length} menu items');
+        return menuItems;
       }
       throw Exception('Failed to fetch menu items by category');
     } on DioException catch (e) {
+      print('❌ API: DioException for category $category: ${e.message}');
       throw _handleDioError(e);
     }
   }
@@ -307,6 +332,7 @@ class ApiService {
             'name': addon.name,
             'price': addon.price,
           }).toList(),
+          'removedIngredients': item.removedIngredients,
         }).toList(),
         'deliveryMethod': deliveryMethod,
         'deliveryAddress': deliveryAddress,
@@ -395,11 +421,27 @@ class ApiService {
     try {
       final response = await _dio.get('/mobile-orders/$id');
       if (response.statusCode == 200) {
-        return Order.fromJson(response.data);
+        return Order.fromJson(response.data['data']);
+      } else {
+        throw Exception('Failed to get order: ${response.statusMessage}');
       }
-      throw Exception('Failed to fetch order');
-    } on DioException catch (e) {
-      throw _handleDioError(e);
+    } catch (e) {
+      print('❌ Error getting order by ID: $e');
+      throw Exception('Failed to get order: $e');
+    }
+  }
+
+  Future<bool> cancelOrder(String orderId) async {
+    try {
+      final response = await _dio.patch('/mobile-orders/$orderId/cancel');
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        throw Exception('Failed to cancel order: ${response.statusMessage}');
+      }
+    } catch (e) {
+      print('❌ Error canceling order: $e');
+      throw Exception('Failed to cancel order: $e');
     }
   }
 
@@ -435,6 +477,30 @@ class ApiService {
         return response.data;
       }
       throw Exception('Failed to create customer');
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getCustomerProfile() async {
+    try {
+      final response = await _dio.get('/customers/profile');
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      throw Exception('Failed to fetch customer profile');
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> updateCustomerProfile(Map<String, dynamic> profileData) async {
+    try {
+      final response = await _dio.put('/customers/profile', data: profileData);
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      throw Exception('Failed to update customer profile');
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -564,9 +630,20 @@ class ApiService {
 
   Future<void> deleteDeliveryAddress(String id) async {
     try {
-      final response = await _dio.delete('/delivery-addresses/delete/$id');
+      final response = await _dio.delete('/delivery-addresses/$id');
       if (response.statusCode != 200) {
         throw Exception('Failed to delete delivery address');
+      }
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  Future<void> setDefaultDeliveryAddress(String id) async {
+    try {
+      final response = await _dio.put('/delivery-addresses/$id/default');
+      if (response.statusCode != 200) {
+        throw Exception('Failed to set default delivery address');
       }
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -627,15 +704,111 @@ class ApiService {
       return imagePath;
     }
     
+    // Handle backend uploaded images (starts with /uploads/)
+    if (imagePath.startsWith('/uploads/')) {
+      final serverBaseUrl = baseUrl.replaceAll('/api/v1', '');
+      return '$serverBaseUrl$imagePath';
+    }
+    
+    // Handle relative paths from backend (../assets/...)
+    if (imagePath.startsWith('../assets/')) {
+      return imagePath.replaceFirst('../', 'assets/');
+    }
+    
     // If it's just a filename (from backend), construct the full URL
     // Backend stores only filenames like "1752799756016-997715280-ramenbg.jpg"
-    final serverBaseUrl = baseUrl.replaceAll('/api/v1', '');
-    return '$serverBaseUrl/uploads/menus/$imagePath';
+    if (!imagePath.contains('/') && imagePath.contains('.')) {
+      final serverBaseUrl = baseUrl.replaceAll('/api/v1', '');
+      
+      // Handle default image mapping (same as POS system)
+      if (imagePath == 'default-ramen.jpg' || imagePath.startsWith('default-')) {
+        // Use the specific database image that POS system uses
+        const databaseImage = '1756859309524-197330587-databaseDesign.jpg';
+        return '$serverBaseUrl/uploads/menus/$databaseImage';
+      }
+      
+      return '$serverBaseUrl/uploads/menus/$imagePath';
+    }
+    
+    // Default case - treat as asset
+    return 'assets/$imagePath';
+  }
+
+  // Submit review for an order
+  Future<void> submitReview(String orderId, int rating, String comment) async {
+    try {
+      final token = await loadToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+      
+      print('🌟 Submitting review:');
+      print('📋 Order ID: $orderId');
+      print('⭐ Rating: $rating');
+      print('💬 Comment: $comment');
+      print('🔐 Token length: ${token.length}');
+      print('🔐 Token preview: ${token.substring(0, math.min(30, token.length))}...');
+      print('🌐 URL: ${_dio.options.baseUrl}/reviews');
+      
+      // Test token validity by trying to decode it
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          print('✅ Token appears to be a valid JWT format');
+        } else {
+          print('❌ Token does not appear to be JWT format');
+        }
+      } catch (e) {
+        print('❌ Error checking token format: $e');
+      }
+      
+      final response = await _dio.post(
+        '/reviews',
+        data: {
+          'orderId': orderId,
+          'rating': rating,
+          'comment': comment,
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+
+      print('✅ Review submitted successfully: ${response.statusCode}');
+      print('📄 Response: ${response.data}');
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to submit review');
+      }
+    } catch (e) {
+      print('❌ Error submitting review: $e');
+      if (e is DioException) {
+        print('🔍 Error type: ${e.type}');
+        print('🔍 Error response: ${e.response?.data}');
+        print('🔍 Error status: ${e.response?.statusCode}');
+        print('🔍 Request URL: ${e.requestOptions.uri}');
+        print('🔍 Request headers: ${e.requestOptions.headers}');
+        
+        // Provide more specific error messages
+        if (e.response?.statusCode == 404) {
+          throw Exception('Review endpoint not found. Please check if the server is running and the reviews API is available.');
+        } else if (e.response?.statusCode == 401) {
+          throw Exception('Authentication failed. Please log in again.');
+        } else if (e.response?.statusCode == 403) {
+          throw Exception('You can only review delivered orders.');
+        } else {
+          throw Exception('Failed to submit review: ${e.response?.data?['message'] ?? e.message}');
+        }
+      }
+      throw Exception('Failed to submit review: $e');
+    }
   }
 
   static bool isNetworkImage(String imagePath) {
-    // It's a network image if it's a full URL or a backend filename (not an asset)
-    return imagePath.startsWith('http://') || imagePath.startsWith('https://') || 
-           (!imagePath.startsWith('assets/') && !imagePath.contains('assets/'));
+    // It's a network image if it's a full URL, backend uploaded image, or backend filename (not an asset)
+    return imagePath.startsWith('http://') || 
+           imagePath.startsWith('https://') || 
+           imagePath.startsWith('/uploads/') ||
+           (!imagePath.startsWith('assets/') && !imagePath.contains('assets/') && imagePath.contains('.'));
   }
 } 

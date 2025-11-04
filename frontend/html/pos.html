@@ -8,6 +8,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="../css/pos.css" rel="stylesheet">
+  <link href="../css/globalNotifications.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 </head>
 <body class="bg-light">
   <!-- Navbar -->
@@ -21,14 +23,42 @@
         RamenXpress
       </a>
       <div class="d-flex align-items-center ms-auto">
-        <img src="../assets/notif.png" alt="notif" class="rounded-circle me-2" style="height: 40px; width: 40px;">
-        <div class="dropdown">
-          <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="adminDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-            <img src="../assets/adminPIC.png" alt="admin" class="rounded-circle me-2" style="height: 40px; width: 40px;">
+        <!-- Notification Dropdown -->
+        <div class="dropdown me-3">
+          <a href="#" class="d-flex align-items-center text-white text-decoration-none position-relative" id="notificationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <img src="../assets/notif.png" alt="notif" class="rounded-circle" style="height: 40px; width: 40px;">
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge" id="notificationBadge" style="display: none;">0</span>
           </a>
-          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
+          <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0" aria-labelledby="notificationDropdown" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
+            <li class="dropdown-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0 fw-bold">Notifications</h6>
+              <button class="btn btn-sm btn-outline-primary" onclick="markAllNotificationsAsRead()">Mark all read</button>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <div id="notificationList">
+              <!-- Notifications will be loaded here -->
+            </div>
+          </ul>
+        </div>
+        
+        <!-- Admin Dropdown -->
+        <div class="dropdown">
+          <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle me-3" id="adminDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <p class="m-2">Cashier</p>
+            <i class="bi bi-person-circle fs-3"></i>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0" aria-labelledby="adminDropdown" style="min-width: 200px;">
+            <li class="dropdown-header d-flex align-items-center">
+              <div>
+                <div class="fw-bold text-dark">Cashier</div>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider"></li>
             <li>
-              <button class="dropdown-item" onclick="window.location.href='../login.html'">Logout</button>
+              <button class="dropdown-item d-flex align-items-center text-danger" onclick="window.location.href='../login.html'">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                Logout
+              </button>
             </li>
           </ul>
         </div>
@@ -55,6 +85,11 @@
               <i class="fas fa-users me-2"></i> Mobile Order
             </a>
           </li>
+          <li class="nav-item mb-2">
+            <a href="kitchenList.html" class="nav-link text-white">
+              <i class="fas fa-list me-2"></i> Kitchen List
+            </a>
+          </li>
         </ul>
       </nav>
 
@@ -76,12 +111,12 @@
             </div>
             <!-- Category Buttons (Sticky) -->
             <div class="category-container">
-              <div class="d-flex flex-wrap gap-2 mb-2 overflow-auto">
-                <button class="btn btn-danger rounded-pill px-3 px-sm-4" data-category="All">All</button>
-                <button class="btn btn-outline-danger rounded-pill px-3 px-sm-4" data-category="Ramen">Ramen</button>
-                <button class="btn btn-outline-danger rounded-pill px-3 px-sm-4" data-category="Rice Bowls">Rice Bowls</button>
-                <button class="btn btn-outline-danger rounded-pill px-3 px-sm-4" data-category="Side Dishes">Side Dishes</button>
-                <button class="btn btn-outline-danger rounded-pill px-3 px-sm-4" data-category="Drinks">Drinks</button>
+              <div class="d-flex flex-wrap gap-2 mb-2 ms-2 overflow-auto">
+                <button class="btn btn-success rounded-pill px-3 px-sm-4" data-category="All">All</button>
+                <button class="btn btn-outline-success rounded-pill px-3 px-sm-4" data-category="Ramen">Ramen</button>
+                <button class="btn btn-outline-success rounded-pill px-3 px-sm-4" data-category="Rice Bowls">Rice Bowls</button>
+                <button class="btn btn-outline-success rounded-pill px-3 px-sm-4" data-category="Side Dishes">Side Dishes</button>
+                <button class="btn btn-outline-success rounded-pill px-3 px-sm-4" data-category="Drinks">Drinks</button>
               </div>
             </div>
             <!-- Menu Items Grid -->
@@ -109,17 +144,13 @@
                 <div class="mt-3">
                   <label class="form-label">Order Type</label>
                   <div class="d-flex gap-2">
-                    <button class="btn btn-outline-danger flex-grow-1 active" data-order-type="Dine-in">
+                    <button class="btn btn-outline-success flex-grow-1 active" data-order-type="Dine-in">
                       <i class="fas fa-utensils mb-1"></i>
                       <div class="small">Dine-in</div>
                     </button>
-                    <button class="btn btn-outline-danger flex-grow-1" data-order-type="Takeout">
+                    <button class="btn btn-outline-success flex-grow-1" data-order-type="Takeout">
                       <i class="fas fa-shopping-bag mb-1"></i>
                       <div class="small">Takeout</div>
-                    </button>
-                    <button class="btn btn-outline-danger flex-grow-1" data-order-type="Pickup">
-                      <i class="fas fa-box mb-1"></i>
-                      <div class="small">Pickup</div>
                     </button>
                   </div>
                 </div>
@@ -128,15 +159,15 @@
                 <div class="mt-3">
                   <label class="form-label">Payment Method</label>
                   <div class="d-flex gap-2">
-                    <button class="btn btn-outline-danger flex-grow-1 active" data-payment="Cash">
+                    <button class="btn btn-outline-primary flex-grow-1 active" data-payment="Cash">
                       <i class="fas fa-money-bill mb-1"></i>
                       <div class="small">Cash</div>
                     </button>
-                    <button class="btn btn-outline-danger flex-grow-1" data-payment="GCash">
+                    <button class="btn btn-outline-primary flex-grow-1" data-payment="GCash" id="gcashBtn">
                       <i class="fas fa-mobile-alt mb-1"></i>
                       <div class="small">GCash</div>
                     </button>
-                    <button class="btn btn-outline-danger flex-grow-1" data-payment="Maya">
+                    <button class="btn btn-outline-primary flex-grow-1" data-payment="Maya" id="mayaBtn">
                       <i class="fas fa-credit-card mb-1"></i>
                       <div class="small">Maya</div>
                     </button>
@@ -169,7 +200,7 @@
         </div>
         <div class="modal-body">
           <div class="text-center mb-3">
-            <img src="" alt="" class="img-fluid rounded" id="modalItemImage" style="max-height: 200px; width: auto; object-fit: cover;">
+            <img src="" alt="" class="img-fluid rounded" id="modalItemImage" style="max-height: 200px; width: auto; object-fit: contain;">
           </div>
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0" id="modalItemPrice">₱0.00</h5>
@@ -180,62 +211,39 @@
             </div>
           </div>
 
-          <!-- Add-ons (for Ramen) -->
-          <div id="addOnsSection" class="mb-3 d-none">
-            <label class="form-label fw-bold">Add-ons</label>
-            <div class="row g-2" id="addOnsGrid">
-              <div class="col-6">
-                <div class="card addon-card" data-addon="extraNoodles" data-price="50">
-                  <div class="card-body p-2 text-center">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="extraNoodles">
-                      <label class="form-check-label" for="extraNoodles">
-                        <i class="fas fa-utensils mb-1 d-block"></i>
-                        <small>Extra Noodles</small>
-                        <div class="text-danger small">+₱50</div>
-                      </label>
+          <!-- Remove Ingredients Section -->
+          <div class="mb-3">
+            <div class="accordion" id="ingredientsAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ingredientsCollapse" aria-expanded="false" aria-controls="ingredientsCollapse">
+                    <i class="fas fa-minus-circle me-2 text-danger"></i>Remove Ingredients
+                  </button>
+                </h2>
+                <div id="ingredientsCollapse" class="accordion-collapse collapse" aria-labelledby="ingredientsHeading" data-bs-parent="#ingredientsAccordion">
+                  <div class="accordion-body p-2">
+                    <div class="row g-1" id="ingredientsGrid">
+                      <!-- Ingredients will be loaded dynamically -->
                     </div>
                   </div>
                 </div>
               </div>
-              <div class="col-6">
-                <div class="card addon-card" data-addon="extraChashu" data-price="80">
-                  <div class="card-body p-2 text-center">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="extraChashu">
-                      <label class="form-check-label" for="extraChashu">
-                        <i class="fas fa-drumstick-bite mb-1 d-block"></i>
-                        <small>Extra Chashu</small>
-                        <div class="text-danger small">+₱80</div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="card addon-card" data-addon="extraEgg" data-price="30">
-                  <div class="card-body p-2 text-center">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="extraEgg">
-                      <label class="form-check-label" for="extraEgg">
-                        <i class="fas fa-egg mb-1 d-block"></i>
-                        <small>Extra Egg</small>
-                        <div class="text-danger small">+₱30</div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="card addon-card" data-addon="extraSeaweed" data-price="20">
-                  <div class="card-body p-2 text-center">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="extraSeaweed">
-                      <label class="form-check-label" for="extraSeaweed">
-                        <i class="fas fa-leaf mb-1 d-block"></i>
-                        <small>Extra Seaweed</small>
-                        <div class="text-danger small">+₱20</div>
-                      </label>
+            </div>
+          </div>
+
+          <!-- Add Extras Section -->
+          <div class="mb-3">
+            <div class="accordion" id="addOnsAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#addOnsCollapse" aria-expanded="false" aria-controls="addOnsCollapse">
+                    <i class="fas fa-plus-circle me-2 text-success"></i>Add Extras
+                  </button>
+                </h2>
+                <div id="addOnsCollapse" class="accordion-collapse collapse" aria-labelledby="addOnsHeading" data-bs-parent="#addOnsAccordion">
+                  <div class="accordion-body p-2">
+                    <div class="row g-1" id="addOnsGrid">
+                      <!-- Add-ons will be loaded dynamically -->
                     </div>
                   </div>
                 </div>
@@ -249,7 +257,7 @@
           <div class="border-top pt-3">
             <div class="d-flex justify-content-between align-items-center">
               <h6 class="mb-0">Total Price:</h6>
-              <h5 class="mb-0 text-danger" id="modalTotalPrice">₱0.00</h5>
+              <h5 class="mb-0 text-dark" id="modalTotalPrice">₱0.00</h5>
             </div>
           </div>
         </div>
@@ -288,12 +296,101 @@
           </div>
           <div class="mb-3">
             <p class="text-muted mb-1">Total Amount:</p>
-            <h4 class="text-danger mb-0" id="paymentTotal"></h4>
+            <h4 class="text-dark mb-0" id="paymentTotal"></h4>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="button" class="btn btn-danger" id="confirmOrderBtn">Confirm Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Code Payment Modal -->
+  <div class="modal fade" id="qrPaymentModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="fas fa-qrcode me-2"></i>
+            <span id="qrPaymentTitle">QR Payment</span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" tabindex="-1"></button>
+        </div>
+        <div class="modal-body text-center">
+          <!-- Loading State -->
+          <div id="qrLoadingState" class="d-none">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">Generating QR code...</p>
+          </div>
+
+          <!-- QR Code Display -->
+          <div id="qrCodeDisplay" class="d-none">
+            <div class="mb-3">
+              <div class="d-flex justify-content-center align-items-center mb-2">
+                <img id="qrPaymentIcon" src="" alt="" class="me-2" style="width: 24px; height: 24px;">
+                <span class="fw-bold" id="qrPaymentMethod">GCash QR</span>
+              </div>
+              <h4 class="text-dark mb-3" id="qrPaymentAmount">₱0.00</h4>
+            </div>
+            
+            <div class="bg-light p-4 rounded mb-3">
+              <a id="qrCodeLink" href="#" target="_blank" title="Click to open payment page">
+                <img id="qrCodeImage" src="" alt="QR Code" class="img-fluid" style="max-width: 300px; cursor: pointer;">
+              </a>
+            </div>
+            
+            <!-- Payment URL Display -->
+            <div class="mb-3">
+              <label class="form-label fw-bold">
+                <i class="fas fa-link me-2"></i>Payment URL:
+              </label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="paymentUrlDisplay" readonly>
+                <button class="btn btn-outline-secondary" type="button" id="copyUrlBtn" title="Copy URL">
+                  <i class="fas fa-copy"></i>
+                </button>
+                <button class="btn btn-outline-primary" type="button" id="openUrlBtn" title="Open URL">
+                  <i class="fas fa-external-link-alt"></i>
+                </button>
+              </div>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>
+              <strong>Instructions:</strong> Scan this QR code with your <span id="qrAppName">GCash</span> app to complete the payment. The order will be processed automatically once payment is confirmed.
+            </div>
+
+            <!-- Payment Status -->
+            <div id="paymentStatus" class="mt-3">
+              <div class="d-flex justify-content-center align-items-center">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                  <span class="visually-hidden">Checking...</span>
+                </div>
+                <span class="text-muted">Waiting for payment...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Error State -->
+          <div id="qrErrorState" class="d-none">
+            <div class="alert alert-danger">
+              <i class="fas fa-exclamation-triangle me-2"></i>
+              <span id="qrErrorMessage">Failed to generate QR code. Please try again.</span>
+            </div>
+            <button class="btn btn-primary" onclick="generateQRCode()">
+              <i class="fas fa-redo me-2"></i>Retry
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel Payment</button>
+          <button type="button" class="btn btn-primary" id="verifyPaymentBtn" onclick="verifyPaymentManually()">
+            <i class="fas fa-check me-2"></i>Verify Payment
+          </button>
         </div>
       </div>
     </div>
@@ -305,6 +402,8 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- Config JS (must be loaded first) -->
   <script src="../js/config.js"></script>
+  <!-- Global Notifications -->
+  <script src="../js/globalNotifications.js"></script>
   <!-- Custom JS -->
   <script src="../js/pos.js"></script>
 

@@ -2,11 +2,86 @@ const Customer = require('../models/customer');
 const { validatePassword, hashPassword, comparePassword, generateCustomerToken } = require('../middleware/customerAuthMiddleware');
 const googleAuthService = require('../services/googleAuthService');
 const emailOTPService = require('../services/emailOTPService');
+const smsService = require('../services/smsService');
+
+// Get customer count with period filtering
+exports.getCustomerCount = async (req, res) => {
+    try {
+        const { period = 'week' } = req.query;
+        
+        let dateFilter = {};
+        
+        // Apply date filter based on period
+        if (period === 'week') {
+            const now = new Date();
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6); // End of current week (Saturday)
+            endOfWeek.setHours(23, 59, 59, 999);
+            
+            dateFilter = {
+                createdAt: {
+                    $gte: startOfWeek,
+                    $lte: endOfWeek
+                }
+            };
+        } else if (period === 'month') {
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            
+            dateFilter = {
+                createdAt: {
+                    $gte: startOfMonth,
+                    $lte: endOfMonth
+                }
+            };
+        } else if (period === 'today') {
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            
+            dateFilter = {
+                createdAt: {
+                    $gte: startOfDay,
+                    $lte: endOfDay
+                }
+            };
+        }
+        
+        const newCustomers = await Customer.find(dateFilter);
+        const totalNewCustomers = newCustomers.length;
+        
+        // Get total customers count
+        const totalCustomers = await Customer.countDocuments();
+        
+        res.json({
+            newCustomers,
+            totalNewCustomers,
+            totalCustomers,
+            period,
+            summary: {
+                totalNewCustomers,
+                totalCustomers,
+                message: `${totalNewCustomers} new customers registered this ${period}`,
+                dateRange: dateFilter.createdAt ? {
+                    from: dateFilter.createdAt.$gte,
+                    to: dateFilter.createdAt.$lte
+                } : null
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
 
 // Initial registration (Step 1) - Create account and send OTP
 exports.registerWithEmail = async (req, res) => {
   try {
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, phoneNumber } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email || !password) {
@@ -37,12 +112,20 @@ exports.registerWithEmail = async (req, res) => {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+    // Format phone number if provided
+    let formattedPhoneNumber = null;
+    if (phoneNumber && phoneNumber.trim()) {
+      formattedPhoneNumber = smsService.formatPhoneNumber(phoneNumber);
+    }
+
     // Create customer with unverified email
     const customer = new Customer({
       firstName,
       lastName,
       email,
       password: hashedPassword,
+      phoneNumber: formattedPhoneNumber,
+      phoneVerified: false,
       emailVerified: false,
       authMethod: 'email'
     });
@@ -345,7 +428,7 @@ exports.getProfile = async (req, res) => {
         lastName: customer.lastName,
         fullName: customer.fullName,
         email: customer.email || customer.googleEmail,
-        phone: customer.phone,
+        phone: customer.phoneNumber || customer.phone,
         authMethod: customer.authMethod,
         emailVerified: customer.emailVerified,
         phoneVerified: customer.phoneVerified
@@ -368,11 +451,41 @@ exports.updateProfile = async (req, res) => {
     const customerId = req.customerId;
     const { firstName, lastName, phone, email } = req.body;
 
+    // Get current customer data to check for changes
+    const currentCustomer = await Customer.findById(customerId);
+    if (!currentCustomer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
     const updateData = {};
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
-    if (phone) updateData.phone = phone;
-    if (email) updateData.email = email;
+    
+    // Check if phone number is being changed
+    if (phone) {
+      // Update both phone fields for consistency
+      updateData.phone = phone;
+      updateData.phoneNumber = phone;
+      
+      // If phone number is different from current, reset verification status
+      if (currentCustomer.phone !== phone && currentCustomer.phoneNumber !== phone) {
+        updateData.phoneVerified = false;
+        console.log(`📱 Phone number changed from ${currentCustomer.phone || currentCustomer.phoneNumber} to ${phone}, resetting phoneVerified to false`);
+      }
+    }
+    
+    // Check if email is being changed
+    if (email) {
+      updateData.email = email;
+      // If email is different from current, reset verification status
+      if (currentCustomer.email !== email && currentCustomer.googleEmail !== email) {
+        updateData.emailVerified = false;
+        console.log(`📧 Email changed from ${currentCustomer.email || currentCustomer.googleEmail} to ${email}, resetting emailVerified to false`);
+      }
+    }
 
     const customer = await Customer.findByIdAndUpdate(
       customerId,
@@ -396,7 +509,7 @@ exports.updateProfile = async (req, res) => {
         lastName: customer.lastName,
         fullName: customer.fullName,
         email: customer.email || customer.googleEmail,
-        phone: customer.phone,
+        phone: customer.phoneNumber || customer.phone,
         authMethod: customer.authMethod,
         emailVerified: customer.emailVerified,
         phoneVerified: customer.phoneVerified

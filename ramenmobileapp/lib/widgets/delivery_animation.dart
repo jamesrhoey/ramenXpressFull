@@ -108,7 +108,7 @@ class _DeliveryAnimationState extends State<DeliveryAnimation>
           
           // Subtitle
           Text(
-            "Hang tight! Our delivery partner is bringing your delicious ramen to you.",
+            "Hang tight! Our delivery rider is bringing your delicious ramen to you.",
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.grey[600],
               height: 1.5,
@@ -195,12 +195,14 @@ class DeliveryStatusWidget extends StatelessWidget {
   final String orderStatus;
   final String? lottieAnimationPath;
   final Map<String, dynamic>? orderDetails;
+  final String? deliveryMethod;
 
   const DeliveryStatusWidget({
     super.key,
     required this.orderStatus,
     this.lottieAnimationPath,
     this.orderDetails,
+    this.deliveryMethod,
   });
 
   @override
@@ -224,12 +226,7 @@ class DeliveryStatusWidget extends StatelessWidget {
           _buildStatusHeader(context),
           const SizedBox(height: 20),
           if (_shouldShowAnimation()) ...[
-            DeliveryAnimation(
-              animationPath: lottieAnimationPath ?? 'assets/animations/delivery_guy.json',
-              message: _getStatusMessage(),
-              width: 150,
-              height: 150,
-            ),
+            _buildAnimationForOrderType(context),
           ] else ...[
             _buildStatusIcon(context),
             const SizedBox(height: 16),
@@ -360,23 +357,56 @@ class DeliveryStatusWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildAnimationForOrderType(BuildContext context) {
+    final isPickup = deliveryMethod?.toLowerCase() == 'pickup';
+    
+    if (!isPickup && (orderStatus.toLowerCase() == 'out for delivery' || orderStatus.toLowerCase() == 'outfordelivery')) {
+      // Show delivery animation only for delivery orders when out for delivery
+      return DeliveryAnimation(
+        animationPath: lottieAnimationPath ?? 'assets/animations/delivery_guy.json',
+        message: _getStatusMessage(),
+        width: 150,
+        height: 150,
+      );
+    } else {
+      // Show static icon for all other states including ready
+      return Column(
+        children: [
+          _buildStatusIcon(context),
+          const SizedBox(height: 16),
+          Text(
+            _getStatusMessage(),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      );
+    }
+  }
+
+
   bool _shouldShowAnimation() {
-    return orderStatus.toLowerCase() == 'ready' ||
-           orderStatus.toLowerCase() == 'out for delivery' || 
-           orderStatus.toLowerCase() == 'on the way';
+    final isPickup = deliveryMethod?.toLowerCase() == 'pickup';
+    return (!isPickup && (orderStatus.toLowerCase() == 'out for delivery' || orderStatus.toLowerCase() == 'outfordelivery'));
   }
 
   String _getStatusMessage() {
+    final isPickup = deliveryMethod?.toLowerCase() == 'pickup';
+    
     switch (orderStatus.toLowerCase()) {
       case 'preparing':
         return 'Preparing your order';
       case 'ready':
-        return 'Order is ready!';
+        return isPickup ? 'Ready for pickup!' : 'Order is ready!';
+      case 'outfordelivery':
       case 'out for delivery':
       case 'on the way':
         return 'On the way to you!';
       case 'delivered':
-        return 'Order delivered!';
+        return isPickup ? 'Order picked up!' : 'Order delivered!';
       default:
         return 'Order status: $orderStatus';
     }
@@ -388,7 +418,9 @@ class DeliveryStatusWidget extends StatelessWidget {
         return Colors.orange;
       case 'ready':
         return Colors.blue;
+      case 'outfordelivery':
       case 'out for delivery':
+        return const Color.fromARGB(255, 255, 165, 0); 
       case 'on the way':
         return Colors.green;
       case 'delivered':
@@ -399,11 +431,13 @@ class DeliveryStatusWidget extends StatelessWidget {
   }
 
   IconData _getStatusIcon() {
+    final isPickup = deliveryMethod?.toLowerCase() == 'pickup';
+    
     switch (orderStatus.toLowerCase()) {
       case 'preparing':
         return Icons.restaurant;
       case 'ready':
-        return Icons.check_circle_outline;
+        return isPickup ? Icons.store : Icons.check_circle_outline;
       case 'out for delivery':
       case 'on the way':
         return Icons.delivery_dining;

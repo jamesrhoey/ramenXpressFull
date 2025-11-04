@@ -1,6 +1,8 @@
 const MobileOrder = require('../models/mobileOrder');
 const Sales = require('../models/sales');
 const Menu = require('../models/menu');
+const Inventory = require('../models/inventory');
+const notificationController = require('./notificationController');
 
 // Create a new mobile order
 exports.createMobileOrder = async (req, res) => {
@@ -30,7 +32,10 @@ exports.createMobileOrder = async (req, res) => {
       return res.status(400).json({ message: 'Payment method is required' });
     }
 
-    // Validate each item
+    // Validate and enrich each item with complete menu data + check inventory
+    const enrichedItems = [];
+    const inventoryUpdates = []; // Track inventory updates to apply later
+    
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (!item.menuItem || !item.menuItem.id || !item.menuItem.name || item.menuItem.price === undefined) {
@@ -43,10 +48,143 @@ exports.createMobileOrder = async (req, res) => {
           message: `Item ${i + 1} has invalid quantity` 
         });
       }
+
+      // Fetch complete menu item data to ensure we have the image
+      let completeMenuItem;
+      try {
+        completeMenuItem = await Menu.findById(item.menuItem.id);
+      } catch (error) {
+        // If ObjectId casting fails, try finding by name as fallback
+        console.log(`ObjectId casting failed for ID: ${item.menuItem.id}, trying name lookup`);
+        completeMenuItem = await Menu.findOne({ name: item.menuItem.name });
+      }
+      
+      if (!completeMenuItem) {
+        return res.status(400).json({ 
+          message: `Menu item with ID ${item.menuItem.id} or name "${item.menuItem.name}" not found` 
+        });
+      }
+
+      // Check inventory availability for the main menu item
+      console.log(`🔍 Checking inventory for: ${completeMenuItem.name}`);
+      const inventoryItem = await Inventory.findOne({ name: completeMenuItem.name });
+      
+      if (inventoryItem) {
+        console.log(`📦 Current stock for ${completeMenuItem.name}: ${inventoryItem.stocks}`);
+        
+        // Check if there's enough stock
+        if (inventoryItem.stocks < item.quantity) {
+          return res.status(400).json({ 
+            message: `Insufficient stock for ${completeMenuItem.name}. Available: ${inventoryItem.stocks}, Requested: ${item.quantity}` 
+          });
+        }
+        
+        // Check if item is out of stock
+        if (inventoryItem.stocks <= 0) {
+          return res.status(400).json({ 
+            message: `${completeMenuItem.name} is currently out of stock` 
+          });
+        }
+        
+        // Track inventory update for later application
+        inventoryUpdates.push({
+          inventoryId: inventoryItem._id,
+          itemName: completeMenuItem.name,
+          currentStock: inventoryItem.stocks,
+          quantityToDeduct: item.quantity,
+          newStock: inventoryItem.stocks - item.quantity
+        });
+      } else {
+        console.log(`⚠️ No inventory record found for: ${completeMenuItem.name}`);
+      }
+
+      // Check inventory for individual ingredients
+      if (completeMenuItem.ingredients && completeMenuItem.ingredients.length > 0) {
+        console.log(`🔍 Checking ingredient inventory for: ${completeMenuItem.name}`);
+        console.log(`🔍 Found ${completeMenuItem.ingredients.length} ingredients to check`);
+        
+        for (const ingredient of completeMenuItem.ingredients) {
+          console.log(`🔍 Checking ingredient: ${ingredient.inventoryItem} (recipe requires ${ingredient.quantity} per item)`);
+          const ingredientInventory = await Inventory.findOne({ name: ingredient.inventoryItem });
+          
+          if (ingredientInventory) {
+            const requiredQuantity = ingredient.quantity * item.quantity;
+            console.log(`📦 Ingredient ${ingredient.inventoryItem}: Available ${ingredientInventory.stocks}, Required: ${requiredQuantity}`);
+            console.log(`🔍 Validation check: ${ingredientInventory.stocks} < ${requiredQuantity} = ${ingredientInventory.stocks < requiredQuantity}`);
+            
+            // Check if there's enough ingredient stock
+            if (ingredientInventory.stocks < requiredQuantity) {
+              console.log(`❌ VALIDATION FAILED: Insufficient ${ingredient.inventoryItem} for ${completeMenuItem.name}. Available: ${ingredientInventory.stocks}, Required: ${requiredQuantity}`);
+              console.log(`❌ RETURNING 400 ERROR TO CLIENT`);
+              return res.status(400).json({ 
+                message: `Insufficient ${ingredient.inventoryItem} for ${completeMenuItem.name}. Available: ${ingredientInventory.stocks}, Required: ${requiredQuantity}` 
+              });
+            }
+            
+            // Check if ingredient is out of stock
+            if (ingredientInventory.stocks <= 0) {
+              console.log(`❌ VALIDATION FAILED: ${ingredient.inventoryItem} is out of stock`);
+              console.log(`❌ RETURNING 400 ERROR TO CLIENT`);
+              return res.status(400).json({ 
+                message: `${ingredient.inventoryItem} is currently out of stock, cannot prepare ${completeMenuItem.name}` 
+              });
+            }
+            
+            console.log(`✅ Ingredient ${ingredient.inventoryItem} validation passed`);
+            
+            // Track ingredient inventory update
+            inventoryUpdates.push({
+              inventoryId: ingredientInventory._id,
+              itemName: ingredient.inventoryItem,
+              currentStock: ingredientInventory.stocks,
+              quantityToDeduct: requiredQuantity,
+              newStock: ingredientInventory.stocks - requiredQuantity
+            });
+          } else {
+            console.log(`⚠️ No inventory record found for ingredient: ${ingredient.inventoryItem}`);
+          }
+        }
+        console.log(`✅ All ingredient validations completed for ${completeMenuItem.name}`);
+      }
+
+      // Check inventory for add-ons if any
+      if (item.selectedAddOns && item.selectedAddOns.length > 0) {
+        for (const addOn of item.selectedAddOns) {
+          const addOnInventory = await Inventory.findOne({ name: addOn.name });
+          if (addOnInventory) {
+            if (addOnInventory.stocks < item.quantity) {
+              return res.status(400).json({ 
+                message: `Insufficient stock for add-on ${addOn.name}. Available: ${addOnInventory.stocks}, Requested: ${item.quantity}` 
+              });
+            }
+            
+            // Track add-on inventory update
+            inventoryUpdates.push({
+              inventoryId: addOnInventory._id,
+              itemName: addOn.name,
+              currentStock: addOnInventory.stocks,
+              quantityToDeduct: item.quantity,
+              newStock: addOnInventory.stocks - item.quantity
+            });
+          }
+        }
+      }
+
+      // Create enriched item with complete menu data including image
+      const enrichedItem = {
+        ...item,
+        menuItem: {
+          id: completeMenuItem._id.toString(),
+          name: completeMenuItem.name,
+          price: completeMenuItem.price,
+          image: completeMenuItem.image
+        }
+      };
+      enrichedItems.push(enrichedItem);
     }
 
-    // Calculate total
-    const subtotal = items.reduce((sum, item) => {
+    // Calculate total using enriched items
+    const subtotal = enrichedItems.reduce((sum, item) => {
       const addOnsPrice = item.selectedAddOns.reduce((addOnSum, addOn) => addOnSum + addOn.price, 0);
       return sum + ((item.menuItem.price + addOnsPrice) * item.quantity);
     }, 0);
@@ -60,7 +198,7 @@ exports.createMobileOrder = async (req, res) => {
 
     const mobileOrder = new MobileOrder({
       orderId,
-      items,
+      items: enrichedItems,
       total,
       deliveryMethod,
       deliveryAddress,
@@ -73,6 +211,97 @@ exports.createMobileOrder = async (req, res) => {
     console.log('💾 Saving mobile order:', JSON.stringify(mobileOrder, null, 2));
     const savedOrder = await mobileOrder.save();
 
+    // Update inventory quantities after successful order creation
+    console.log('📦 Updating inventory quantities...');
+    for (const update of inventoryUpdates) {
+      try {
+        const updatedInventory = await Inventory.findByIdAndUpdate(
+          update.inventoryId,
+          { 
+            stocks: update.newStock,
+            // Update status based on new stock level
+            status: update.newStock <= 0 ? 'out of stock' : 
+                   update.newStock <= 10 ? 'low stock' : 'in stock' // Using default threshold of 10
+          },
+          { new: true }
+        );
+        
+        console.log(`✅ Updated ${update.itemName}: ${update.currentStock} → ${update.newStock}`);
+        
+        // Create low stock or out of stock notifications
+        if (update.newStock <= 0) {
+          await notificationController.createNotification({
+            type: 'warning',
+            title: `⚠️ Out of Stock Alert`,
+            message: `${update.itemName} is now out of stock after recent order`,
+            targetRoles: ['admin', 'cashier'],
+            priority: 'high'
+          });
+        } else if (update.newStock <= 10) { // Using default threshold
+          await notificationController.createNotification({
+            type: 'warning',
+            title: `📉 Low Stock Alert`,
+            message: `${update.itemName} is running low (${update.newStock} remaining) after recent order`,
+            targetRoles: ['admin', 'cashier'],
+            priority: 'medium'
+          });
+        }
+        
+        // Emit real-time inventory update
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('inventoryUpdate', {
+            itemId: updatedInventory._id,
+            itemName: updatedInventory.name,
+            stocks: updatedInventory.stocks,
+            status: updatedInventory.status,
+            orderId: savedOrder.orderId
+          });
+        }
+      } catch (inventoryError) {
+        console.error(`❌ Failed to update inventory for ${update.itemName}:`, inventoryError);
+        // Log error but don't fail the order - inventory can be manually adjusted
+      }
+    }
+
+    // Create notification for new mobile order
+    try {
+      const customerName = req.customer?.firstName || req.customer?.name || 'Customer';
+      console.log('Creating notification for mobile order:', {
+        orderId: orderId,
+        customerName: customerName,
+        total: total,
+        paymentMethod: paymentMethod
+      });
+      
+      const notification = await notificationController.createNewOrderNotification({
+        orderId: orderId,
+        customerName: customerName,
+        total: total,
+        paymentMethod: paymentMethod
+      });
+      
+      console.log('Notification created successfully:', notification);
+      
+      // Emit real-time notification via Socket.IO
+      const io = req.app.get('io');
+      if (io && notification) {
+        console.log('Emitting newMobileOrder socket event with notification');
+        io.emit('newMobileOrder', {
+          orderId: orderId,
+          customerName: customerName,
+          total: total,
+          paymentMethod: paymentMethod,
+          notification: notification
+        });
+      } else {
+        console.log('Socket.IO not available or notification is null');
+      }
+    } catch (notificationError) {
+      console.error('Failed to create notification:', notificationError);
+      // Don't fail the order creation if notification fails
+    }
+
     // Create corresponding sales record for each item
     try {
       for (const item of items) {
@@ -81,11 +310,20 @@ exports.createMobileOrder = async (req, res) => {
         const salesOrderID = (totalSales + 1).toString().padStart(4, '0');
 
         // Map delivery method to service type
-        const serviceType = deliveryMethod === 'Delivery' ? 'pickup' : 'pickup';
+        const serviceType = deliveryMethod === 'Delivery' ? 'takeout' : 'takeout';
 
         // Calculate total amount for this item
         const itemTotal = (item.menuItem.price * item.quantity) + 
                          item.selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0);
+
+        // Map payment method to valid enum values
+        const mapPaymentMethod = (method) => {
+          const methodLower = method.toLowerCase();
+          if (methodLower.includes('cash')) return 'cash';
+          if (methodLower.includes('gcash')) return 'gcash';
+          if (methodLower.includes('maya')) return 'paymaya';
+          return 'cash'; // Default fallback
+        };
 
         // Create sales record without requiring menu item lookup
         const salesRecord = new Sales({
@@ -94,7 +332,7 @@ exports.createMobileOrder = async (req, res) => {
           quantity: item.quantity,
           price: item.menuItem.price,
           addOns: [], // Skip add-ons for now to avoid ObjectId issues
-          paymentMethod: paymentMethod.toLowerCase(),
+          paymentMethod: mapPaymentMethod(paymentMethod),
           serviceType: serviceType,
           totalAmount: itemTotal,
           mobileOrderId: savedOrder._id,
@@ -168,6 +406,192 @@ exports.updateOrderStatus = async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    
+    // Update corresponding sales records status
+    try {
+      const salesRecords = await Sales.find({ 
+        mobileOrderId: updatedOrder._id 
+      });
+      
+      if (salesRecords.length > 0) {
+        await Sales.updateMany(
+          { mobileOrderId: updatedOrder._id },
+          { status: updatedOrder.status }
+        );
+        console.log(`📊 Updated ${salesRecords.length} sales records to status: ${updatedOrder.status}`);
+      }
+    } catch (salesUpdateError) {
+      console.error('Failed to update sales records status:', salesUpdateError);
+      // Don't fail the mobile order update if sales update fails
+    }
+    
+    // Create notification for status update
+    try {
+      const customerName = updatedOrder.customerId?.firstName || 
+                          updatedOrder.customerId?.name || 
+                          'Customer';
+      
+      const notification = await notificationController.createStatusUpdateNotification({
+        orderId: updatedOrder.orderId,
+        status: updatedOrder.status,
+        customerName: customerName
+      });
+      
+      // Emit socket.io event for real-time update
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('orderStatusUpdate', {
+          orderId: updatedOrder.orderId, // Use the display order ID, not MongoDB _id
+          status: updatedOrder.status,
+          customerId: updatedOrder.customerId?._id,
+          deliveryMethod: updatedOrder.deliveryMethod,
+          items: updatedOrder.items,
+          order: updatedOrder,
+          notification: notification
+        });
+      }
+    } catch (notificationError) {
+      console.error('Failed to create status notification:', notificationError);
+      // Still emit the socket event even if notification fails
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('orderStatusUpdate', {
+          orderId: updatedOrder.orderId, // Use the display order ID, not MongoDB _id
+          status: updatedOrder.status,
+          customerId: updatedOrder.customerId?._id,
+          deliveryMethod: updatedOrder.deliveryMethod,
+          items: updatedOrder.items,
+          order: updatedOrder
+        });
+      }
+    }
+    
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get mobile order by ID
+exports.getMobileOrderById = async (req, res) => {
+  try {
+    const order = await MobileOrder.findById(req.params.id).populate('customerId', 'firstName lastName name fullName phone');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    
+    // Return the order wrapped in a data object for consistency
+    res.json({ data: order });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Cancel a mobile order
+exports.cancelMobileOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the order
+    const order = await MobileOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    // Check if order can be cancelled (only pending orders can be cancelled)
+    if (order.status !== 'pending') {
+      return res.status(400).json({ 
+        message: 'Order cannot be cancelled. Only pending orders can be cancelled.' 
+      });
+    }
+    
+    // Update order status to cancelled
+    const updatedOrder = await MobileOrder.findByIdAndUpdate(
+      id,
+      { status: 'cancelled' },
+      { new: true }
+    ).populate('customerId', 'firstName lastName name fullName phone');
+
+    // Restore inventory quantities when order is cancelled
+    console.log('📦 Restoring inventory quantities for cancelled order...');
+    try {
+      for (const item of order.items) {
+        // Restore main menu item stock
+        const inventoryItem = await Inventory.findOne({ name: item.menuItem.name });
+        if (inventoryItem) {
+          const newStock = inventoryItem.stocks + item.quantity;
+          await Inventory.findByIdAndUpdate(
+            inventoryItem._id,
+            { 
+              stocks: newStock,
+              status: newStock <= 0 ? 'out of stock' : 
+                     newStock <= 10 ? 'low stock' : 'in stock'
+            }
+          );
+          console.log(`✅ Restored ${item.menuItem.name}: ${inventoryItem.stocks} → ${newStock}`);
+        }
+
+        // Restore ingredient stocks
+        const completeMenuItem = await Menu.findOne({ name: item.menuItem.name });
+        if (completeMenuItem && completeMenuItem.ingredients && completeMenuItem.ingredients.length > 0) {
+          for (const ingredient of completeMenuItem.ingredients) {
+            const ingredientInventory = await Inventory.findOne({ name: ingredient.inventoryItem });
+            if (ingredientInventory) {
+              const quantityToRestore = ingredient.quantity * item.quantity;
+              const newStock = ingredientInventory.stocks + quantityToRestore;
+              await Inventory.findByIdAndUpdate(
+                ingredientInventory._id,
+                { 
+                  stocks: newStock,
+                  status: newStock <= 0 ? 'out of stock' : 
+                         newStock <= 10 ? 'low stock' : 'in stock'
+                }
+              );
+              console.log(`✅ Restored ingredient ${ingredient.inventoryItem}: ${ingredientInventory.stocks} → ${newStock}`);
+            }
+          }
+        }
+
+        // Restore add-on stocks
+        if (item.selectedAddOns && item.selectedAddOns.length > 0) {
+          for (const addOn of item.selectedAddOns) {
+            const addOnInventory = await Inventory.findOne({ name: addOn.name });
+            if (addOnInventory) {
+              const newStock = addOnInventory.stocks + item.quantity;
+              await Inventory.findByIdAndUpdate(
+                addOnInventory._id,
+                { 
+                  stocks: newStock,
+                  status: newStock <= 0 ? 'out of stock' : 
+                         newStock <= 10 ? 'low stock' : 'in stock'
+                }
+              );
+              console.log(`✅ Restored add-on ${addOn.name}: ${addOnInventory.stocks} → ${newStock}`);
+            }
+          }
+        }
+      }
+    } catch (inventoryRestoreError) {
+      console.error('❌ Failed to restore inventory:', inventoryRestoreError);
+      // Don't fail the cancellation if inventory restore fails
+    }
+    
+    // Update corresponding sales records status to cancelled
+    try {
+      const salesRecords = await Sales.find({ 
+        mobileOrderId: updatedOrder._id 
+      });
+      
+      if (salesRecords.length > 0) {
+        await Sales.updateMany(
+          { mobileOrderId: updatedOrder._id },
+          { status: 'cancelled' }
+        );
+        console.log(`📊 Updated ${salesRecords.length} sales records to status: cancelled`);
+      }
+    } catch (salesUpdateError) {
+      console.error('Failed to update sales records status:', salesUpdateError);
+      // Don't fail the mobile order update if sales update fails
+    }
+    
     // Emit socket.io event for real-time update
     const io = req.app.get('io');
     if (io) {
@@ -178,19 +602,15 @@ exports.updateOrderStatus = async (req, res) => {
         order: updatedOrder
       });
     }
-    res.json(updatedOrder);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Get mobile order by ID
-exports.getMobileOrderById = async (req, res) => {
-  try {
-    const order = await MobileOrder.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: 'Order not found' });
-    res.json(order);
+    
+    console.log(`🚫 Order ${order.orderId} has been cancelled`);
+    res.json({ 
+      success: true, 
+      message: 'Order cancelled successfully',
+      order: updatedOrder 
+    });
   } catch (err) {
+    console.error('❌ Error cancelling order:', err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -231,11 +651,20 @@ exports.syncMobileOrdersToSales = async (req, res) => {
             const salesOrderID = (totalSales + 1).toString().padStart(4, '0');
 
             // Map delivery method to service type
-            const serviceType = mobileOrder.deliveryMethod === 'Delivery' ? 'pickup' : 'pickup';
+            const serviceType = mobileOrder.deliveryMethod === 'Delivery' ? 'takeout' : 'takeout';
 
             // Calculate total amount for this item
             const itemTotal = (item.menuItem.price * item.quantity) + 
                              item.selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0);
+
+            // Map payment method to valid enum values
+            const mapPaymentMethod = (method) => {
+              const methodLower = method.toLowerCase();
+              if (methodLower.includes('cash')) return 'cash';
+              if (methodLower.includes('gcash')) return 'gcash';
+              if (methodLower.includes('maya')) return 'paymaya';
+              return 'cash'; // Default fallback
+            };
 
             // Create sales record without requiring menu item lookup
             const salesRecord = new Sales({
@@ -244,7 +673,7 @@ exports.syncMobileOrdersToSales = async (req, res) => {
               quantity: item.quantity,
               price: item.menuItem.price,
               addOns: [], // Skip add-ons for now to avoid ObjectId issues
-              paymentMethod: mobileOrder.paymentMethod.toLowerCase(),
+              paymentMethod: mapPaymentMethod(mobileOrder.paymentMethod),
               serviceType: serviceType,
               totalAmount: itemTotal,
               mobileOrderId: mobileOrder._id, // Reference to mobile order
